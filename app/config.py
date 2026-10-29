@@ -11,7 +11,7 @@ load_dotenv()
 
 DEFAULT_FEEDS = (
     "https://feeds.bbci.co.uk/sport/football/rss.xml",
-    "https://feeds.theguardian.com/theguardian/football",
+    "https://www.theguardian.com/football/rss",
 )
 
 
