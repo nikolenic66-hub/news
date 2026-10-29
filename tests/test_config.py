@@ -6,7 +6,7 @@ def _clear_app_env(monkeypatch):
         "DATABASE_URL", "APP_MODE", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHANNEL_ID",
         "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL",
         "DEEPSEEK_DAILY_BUDGET_USD", "MAX_DEEPSEEK_CALLS_PER_DAY",
-        "RSS_FEEDS", "MAX_POSTS_PER_DAY",
+        "RSS_FEEDS", "MAX_POSTS_PER_DAY", "DB_RETENTION_DAYS",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -45,3 +45,9 @@ def test_post_limit_is_clamped_to_ten(monkeypatch):
     monkeypatch.setenv("MAX_POSTS_PER_DAY", "1000")
     settings = Settings.from_env()
     assert settings.max_posts_per_day == 10
+
+
+def test_history_retention_defaults_to_four_months(monkeypatch):
+    _clear_app_env(monkeypatch)
+    settings = Settings.from_env()
+    assert settings.db_retention_days == 120
