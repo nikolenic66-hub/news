@@ -101,9 +101,18 @@ async def _search_once(client: httpx.AsyncClient, settings: Settings, query: str
         if not _license_is_redistributable(licence):
             continue
         licence_url = str((ext.get("LicenseUrl") or {}).get("value") or page_url)
+        parsed_license_url = urlsplit(licence_url)
+        if parsed_license_url.scheme == "http" and parsed_license_url.hostname:
+            # Commons metadata still contains some legacy http:// Creative Commons links.
+            licence_url = parsed_license_url._replace(scheme="https").geturl()
         if urlsplit(licence_url).scheme != "https":
             licence_url = page_url
-        author = _metadata_value(ext, "Artist") or _metadata_value(ext, "Credit") or "Автор не указан"
+        author = _metadata_value(ext, "Artist") or _metadata_value(ext, "Credit")
+        needs_attribution = licence.upper().startswith(("CC BY ", "CC BY-SA "))
+        if needs_attribution and not author:
+            # Do not publish an attribution-required image when the author cannot be identified.
+            continue
+        author = author or "Автор не указан"
         description = _metadata_value(ext, "ImageDescription")
         meta_text = f"{page.get('title', '')} {description}"
         overlap = len(wanted & _tokens(meta_text))
