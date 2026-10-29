@@ -17,6 +17,7 @@ from app.models import NewsItem
 from app.photos import find_licensed_photo
 from app.sources import FeedItem, fetch_all_feeds
 from app.telegram import DeliveryUncertain, TelegramAPIError, download_photo, publish_photo
+from app.usage import DeepSeekBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ async def collect_news(session: AsyncSession, client: httpx.AsyncClient, setting
     return added
 
 
-async def process_new_items(session: AsyncSession, client: httpx.AsyncClient, settings: Settings) -> int:
+async def process_new_items(session: AsyncSession, sessions: async_sessionmaker, client: httpx.AsyncClient, settings: Settings) -> int:
     result = await session.execute(
         select(NewsItem)
         .where(NewsItem.status == "new", NewsItem.attempts < 3)
@@ -139,7 +140,15 @@ async def process_new_items(session: AsyncSession, client: httpx.AsyncClient, se
         item.last_error = None
         await session.commit()
         try:
-            draft = await create_draft(client, settings, item)
+            draft = await create_draft(client, sessions, settings, item)
+        except DeepSeekBudgetExceeded as exc:
+            # Do not count quota exhaustion as a failed article attempt.
+            item.status = "new"
+            item.attempts = max(0, (item.attempts or 1) - 1)
+            item.last_error = str(exc)[:200]
+            await session.commit()
+            logger.warning("DeepSeek daily limit reached; remaining candidates are deferred until the next day")
+            break
         except Exception as exc:
             item.last_error = f"Editorial API error: {exc.__class__.__name__}"
             item.status = "new" if item.attempts < 3 else "failed"
@@ -342,6 +351,12 @@ async def run_cycle(sessions: async_sessionmaker, client: httpx.AsyncClient, set
         await recover_stale_sends(session)
         await expire_stale_candidates(session, settings)
         await collect_news(session, client, settings)
-        await process_new_items(session, client, settings)
+        if settings.app_mode == "collect_only":
+            logger.info("APP_MODE=collect_only: stored RSS candidates; AI and photo APIs were not called")
+            return
+        await process_new_items(session, sessions, client, settings)
         await attach_licensed_photos(session, client, settings)
-        await publish_one_due(session, client, settings)
+        if settings.app_mode == "live":
+            await publish_one_due(session, client, settings)
+        else:
+            logger.info("APP_MODE=prepare: prepared candidates but Telegram publishing is disabled")
