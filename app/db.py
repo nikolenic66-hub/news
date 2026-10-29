@@ -1,11 +1,10 @@
-"""SQLAlchemy async setup with Neon SSL URL normalization."""
+"""SQLAlchemy async connection setup for Neon/PostgreSQL."""
 from __future__ import annotations
 
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import Settings
-from app.models import Base
 
 
 def make_database_url(raw_url: str) -> tuple[URL, dict[str, str]]:
@@ -27,11 +26,13 @@ def make_database_url(raw_url: str) -> tuple[URL, dict[str, str]]:
 
 def create_database(settings: Settings):
     url, connect_args = make_database_url(settings.database_url)
-    engine = create_async_engine(url, pool_pre_ping=True, connect_args=connect_args)
+    # Small pool is sufficient for one worker. Each cycle disposes it to enable Neon scale-to-zero.
+    engine = create_async_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=1,
+        max_overflow=0,
+        connect_args=connect_args,
+    )
     sessions = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     return engine, sessions
-
-
-async def initialize_database(engine) -> None:
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
