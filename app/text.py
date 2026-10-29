@@ -17,15 +17,15 @@ AI_CLICHES = (
 
 
 def clean_text(value: str) -> str:
-    value = value.replace("\\u00a0", " ").replace("\\u200b", "")
+    value = value.replace("\u00a0", " ").replace("\u200b", "")
     # The channel style deliberately avoids typographic long dashes.
-    value = value.replace("\\u2014", " - ").replace("\\u2013", " - ").replace("\\u2212", "-")
-    value = re.sub(r"[ \\t]+", " ", value)
-    value = re.sub(r" *\\n[ \\t]*", "\\n", value)
-    value = re.sub(r"\\n{3,}", "\\n\\n", value)
-    value = re.sub(r"\\s+([,.;:!?])", r"\\1", value)
-    value = re.sub(r"([,;:])(?=\\S)", r"\\1 ", value)
-    return value.strip(" \\n\\t-")
+    value = value.replace("\u2014", " - ").replace("\u2013", " - ").replace("\u2212", "-")
+    value = re.sub(r"[ \t]+", " ", value)
+    value = re.sub(r" *\n[ \t]*", "\n", value)
+    value = re.sub(r"\n{3,}", "\n\n", value)
+    value = re.sub(r"\s+([,.;:!?])", r"\1", value)
+    value = re.sub(r"([,;:])(?=\S)", r"\1 ", value)
+    return value.strip(" \n\t-")
 
 
 def contains_ai_cliche(value: str) -> bool:
@@ -59,13 +59,13 @@ def build_caption(title: str, body: str, source_name: str, source_url: str,
     source_line = f'Источник: <a href="{source_link}">{source_label}</a>'
     photo_line = f'Фото: <a href="{image_link}">{author}</a> · <a href="{license_link}">{license_label}</a> · Wikimedia Commons'
     if illustrative:
-        photo_line += "\\nФото иллюстративное."
+        photo_line += "\nФото иллюстративное."
 
     raw_body = clean_text(body)
 
     def compose(candidate_body: str) -> str:
         safe_body = html.escape(candidate_body, quote=False)
-        return f"<b>{safe_title}</b>\\n\\n{safe_body}\\n\\n{source_line}\\n{photo_line}"
+        return f"<b>{safe_title}</b>\n\n{safe_body}\n\n{source_line}\n{photo_line}"
 
     # Iterate on the unescaped body because HTML entities add characters to the payload.
     candidate = truncate_on_word(raw_body, 650)
@@ -75,7 +75,7 @@ def build_caption(title: str, body: str, source_name: str, source_url: str,
         candidate = truncate_on_word(candidate, max(0, len(candidate) - max(overage, 30)))
         caption = compose(candidate)
     if len(caption) > 1024:
-        # Defensive fallback: preserve source and license attribution instead of cutting HTML tags.
+        # Preserve source and license attribution instead of cutting HTML tags.
         candidate = ""
         caption = compose(candidate)
     if len(caption) > 1024:
