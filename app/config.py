@@ -59,6 +59,7 @@ class Settings:
     publish_window_start_hour: int
     publish_window_end_hour: int
     max_news_age_hours: int
+    db_retention_days: int
     max_items_to_process_per_cycle: int
     wikimedia_user_agent: str
     max_photo_attempts: int
@@ -92,6 +93,7 @@ class Settings:
             publish_window_start_hour=_int_env("PUBLISH_WINDOW_START_HOUR", 8, 0, 23),
             publish_window_end_hour=_int_env("PUBLISH_WINDOW_END_HOUR", 23, 1, 24),
             max_news_age_hours=_int_env("MAX_NEWS_AGE_HOURS", 36, 1, 168),
+            db_retention_days=_int_env("DB_RETENTION_DAYS", 120, 30, 730),
             max_items_to_process_per_cycle=_int_env("MAX_ITEMS_TO_PROCESS_PER_CYCLE", 3, 1, 10),
             wikimedia_user_agent=os.getenv(
                 "WIKIMEDIA_USER_AGENT",
