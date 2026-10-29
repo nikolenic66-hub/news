@@ -1,15 +1,21 @@
-"""Long-running polling worker; no inbound HTTP server or open port is required."""
+"""Worker entry point. Supports a one-shot mode for scheduled executions."""
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
+import sys
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
+from sqlalchemy import text
 
 from app.config import Settings
-from app.db import create_database, initialize_database
+from app.db import create_database
 from app.pipeline import run_cycle
+
+# Session-level PostgreSQL advisory lock prevents overlapping runs from posting duplicates.
+_PIPELINE_LOCK_ID = 726100103
 
 
 def configure_logging(level: str) -> None:
@@ -19,7 +25,51 @@ def configure_logging(level: str) -> None:
     )
 
 
-async def main() -> None:
+async def apply_migrations(settings: Settings) -> None:
+    """Run versioned schema migrations before touching pipeline tables."""
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-m",
+        "alembic",
+        "upgrade",
+        "head",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    output, _ = await process.communicate()
+    if process.returncode != 0:
+        text_output = output.decode("utf-8", errors="replace")
+        # Never echo a raw secret-bearing connection string to logs.
+        if settings.database_url:
+            text_output = text_output.replace(settings.database_url, "[DATABASE_URL REDACTED]")
+        logging.getLogger(__name__).error("Database migration failed:\n%s", text_output[-2500:])
+        raise RuntimeError("Database migration failed; see the redacted application logs")
+
+
+async def run_locked_cycle(engine, sessions, client: httpx.AsyncClient, settings: Settings) -> bool:
+    """Run one cycle only if no overlapping worker currently holds the database lock."""
+    async with engine.connect() as lock_connection:
+        result = await lock_connection.execute(
+            text("SELECT pg_try_advisory_lock(:lock_id)"),
+            {"lock_id": _PIPELINE_LOCK_ID},
+        )
+        acquired = bool(result.scalar_one())
+        await lock_connection.commit()
+        if not acquired:
+            logging.getLogger(__name__).warning("Another worker run is active; skipping this cycle")
+            return False
+        try:
+            await run_cycle(sessions, client, settings)
+            return True
+        finally:
+            await lock_connection.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": _PIPELINE_LOCK_ID},
+            )
+            await lock_connection.commit()
+
+
+async def main(once: bool = False) -> None:
     settings = Settings.from_env()
     configure_logging(settings.log_level)
     logger = logging.getLogger(__name__)
@@ -31,30 +81,48 @@ async def main() -> None:
     if settings.publish_window_start_hour >= settings.publish_window_end_hour:
         raise RuntimeError("PUBLISH_WINDOW_START_HOUR must be earlier than PUBLISH_WINDOW_END_HOUR")
 
+    await apply_migrations(settings)
     engine, sessions = create_database(settings)
     try:
-        await initialize_database(engine)
-        logger.info(
-            "Football News Bot started; feeds=%d, max_posts_per_day=%d, timezone=%s",
-            len(settings.rss_feeds), settings.max_posts_per_day, settings.app_timezone,
-        )
         timeout = httpx.Timeout(30.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            logger.info(
+                "Football News Bot started; mode=%s, feeds=%d, max_posts=%d/day, "
+                "DeepSeek calls=%d/day, timezone=%s, once=%s",
+                settings.app_mode,
+                len(settings.rss_feeds),
+                settings.max_posts_per_day,
+                settings.max_deepseek_calls_per_day,
+                settings.app_timezone,
+                once,
+            )
             while True:
                 try:
-                    await run_cycle(sessions, client, settings)
+                    await run_locked_cycle(engine, sessions, client, settings)
                 except asyncio.CancelledError:
                     raise
                 except Exception:
-                    # A single bad feed/API response must not stop the worker permanently.
+                    # A bad feed/API response should not permanently stop a continuous worker.
                     logger.exception("Unexpected pipeline cycle error")
+                finally:
+                    # Return idle connections so Neon can scale to zero between polling cycles.
+                    await engine.dispose()
+                if once:
+                    break
                 await asyncio.sleep(settings.poll_interval_minutes * 60)
     finally:
         await engine.dispose()
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Football News Bot")
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run one pipeline cycle and exit (for Amvera Cron Jobs).",
+    )
+    args = parser.parse_args()
     try:
-        asyncio.run(main())
+        asyncio.run(main(once=args.once))
     except KeyboardInterrupt:
         pass
