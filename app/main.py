@@ -13,6 +13,7 @@ from sqlalchemy import text
 from app.config import Settings
 from app.db import create_database
 from app.pipeline import run_cycle
+from app.sources import fetch_all_feeds
 
 # Session-level PostgreSQL advisory lock prevents overlapping runs from posting duplicates.
 _PIPELINE_LOCK_ID = 726100103
@@ -74,7 +75,7 @@ async def run_locked_cycle(engine, sessions, client: httpx.AsyncClient, settings
             await lock_connection.commit()
 
 
-async def main(once: bool = False) -> None:
+async def main(once: bool = False, check: bool = False) -> None:
     settings = Settings.from_env()
     configure_logging(settings.log_level)
     logger = logging.getLogger(__name__)
@@ -91,6 +92,19 @@ async def main(once: bool = False) -> None:
     try:
         timeout = httpx.Timeout(30.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            if check:
+                # Read-only preflight after versioned migrations; never calls DeepSeek, photos, or Telegram.
+                async with engine.connect() as connection:
+                    database_result = await connection.execute(text("SELECT 1"))
+                    if database_result.scalar_one() != 1:
+                        raise RuntimeError("Database preflight returned an unexpected result")
+                logger.info("Preflight OK: PostgreSQL connection and migrations are available")
+                items = await fetch_all_feeds(client, settings.rss_feeds)
+                if items:
+                    logger.info("Preflight OK: RSS returned %d recent candidates across %d configured feeds", len(items), len(settings.rss_feeds))
+                else:
+                    logger.warning("Database is reachable, but all RSS feeds returned zero candidates. Check feed URLs/access before enabling prepare/live.")
+                return
             logger.info(
                 "Football News Bot started; mode=%s, feeds=%d, max_posts=%d/day, "
                 "DeepSeek calls=%d/day, timezone=%s, once=%s",
@@ -124,12 +138,17 @@ async def main(once: bool = False) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Football News Bot")
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Validate config, apply/check migrations, test DB and RSS without AI/photo/Telegram calls.",
+    )
+    parser.add_argument(
         "--once",
         action="store_true",
         help="Run one pipeline cycle and exit (for Amvera Cron Jobs).",
     )
     args = parser.parse_args()
     try:
-        asyncio.run(main(once=args.once))
+        asyncio.run(main(once=args.once, check=args.check))
     except KeyboardInterrupt:
         pass
