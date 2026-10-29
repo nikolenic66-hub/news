@@ -283,6 +283,21 @@ async def publish_one_due(session: AsyncSession, client: httpx.AsyncClient,
     return True
 
 
+async def recover_stale_processing(session: AsyncSession) -> int:
+    cutoff = _now_utc() - timedelta(minutes=20)
+    result = await session.execute(
+        select(NewsItem).where(NewsItem.status == "processing", NewsItem.updated_at < cutoff)
+    )
+    items = list(result.scalars().all())
+    for item in items:
+        item.status = "new" if item.attempts < 3 else "failed"
+        item.last_error = "Recovered an interrupted editorial-processing attempt"
+    if items:
+        await session.commit()
+        logger.warning("Recovered %d interrupted editorial attempts", len(items))
+    return len(items)
+
+
 async def recover_stale_sends(session: AsyncSession) -> int:
     cutoff = _now_utc() - timedelta(minutes=15)
     result = await session.execute(
@@ -300,6 +315,7 @@ async def recover_stale_sends(session: AsyncSession) -> int:
 
 async def run_cycle(sessions: async_sessionmaker, client: httpx.AsyncClient, settings: Settings) -> None:
     async with sessions() as session:
+        await recover_stale_processing(session)
         await recover_stale_sends(session)
         await collect_news(session, client, settings)
         await process_new_items(session, client, settings)
