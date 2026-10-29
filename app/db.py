@@ -30,7 +30,8 @@ def create_database(settings: Settings):
     engine = create_async_engine(
         url,
         pool_pre_ping=True,
-        pool_size=1,
+        # One slot holds the advisory lock; the second is used by pipeline sessions.
+        pool_size=2,
         max_overflow=0,
         connect_args=connect_args,
     )
