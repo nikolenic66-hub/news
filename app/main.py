@@ -14,6 +14,7 @@ from app.config import Settings
 from app.db import create_database
 from app.pipeline import run_cycle
 from app.sources import fetch_all_feeds
+from app.telegram_bot import run_private_bot
 
 # Session-level PostgreSQL advisory lock prevents overlapping runs from posting duplicates.
 _PIPELINE_LOCK_ID = 726100103
@@ -115,22 +116,32 @@ async def main(once: bool = False, check: bool = False) -> None:
                 settings.app_timezone,
                 once,
             )
-            while True:
-                try:
-                    await run_locked_cycle(engine, sessions, client, settings)
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    # A scheduled one-shot run should report failure to the scheduler.
-                    logger.exception("Unexpected pipeline cycle error")
-                    if once:
+            telegram_task = (
+                asyncio.create_task(run_private_bot(client, settings), name="telegram-private-bot")
+                if settings.telegram_bot_token and not check
+                else None
+            )
+            try:
+                while True:
+                    try:
+                        await run_locked_cycle(engine, sessions, client, settings)
+                    except asyncio.CancelledError:
                         raise
-                finally:
-                    # Return idle connections so Neon can scale to zero between polling cycles.
-                    await engine.dispose()
-                if once:
-                    break
-                await asyncio.sleep(settings.poll_interval_minutes * 60)
+                    except Exception:
+                        # A scheduled one-shot run should report failure to the scheduler.
+                        logger.exception("Unexpected pipeline cycle error")
+                        if once:
+                            raise
+                    finally:
+                        # Return idle connections so Neon can scale to zero between polling cycles.
+                        await engine.dispose()
+                    if once:
+                        break
+                    await asyncio.sleep(settings.poll_interval_minutes * 60)
+            finally:
+                if telegram_task is not None:
+                    telegram_task.cancel()
+                    await asyncio.gather(telegram_task, return_exceptions=True)
     finally:
         await engine.dispose()
 
