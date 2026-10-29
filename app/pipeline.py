@@ -72,7 +72,11 @@ async def collect_news(session: AsyncSession, client: httpx.AsyncClient, setting
         if feed_item.url in known_urls:
             continue
         published = _timestamp(feed_item.published_at)
-        if published and (published < freshness_cutoff or published > now + timedelta(hours=6)):
+        # If a feed has no timestamp, we cannot establish that the item is fresh enough to publish.
+        if published is None:
+            logger.debug("Skipping undated RSS item from %s", feed_item.source_name)
+            continue
+        if published < freshness_cutoff or published > now + timedelta(hours=6):
             continue
         # One event copied across several feeds should enter the queue only once.
         if any(_titles_are_similar(feed_item.title, old_title) for old_title in recent_titles):
