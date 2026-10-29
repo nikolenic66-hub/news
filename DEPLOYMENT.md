@@ -1,64 +1,79 @@
-# Deployment checklist: Neon + Telegram + DeepSeek + Amvera
+# Предзапусковая инструкция: Neon + Telegram + DeepSeek + Amvera
 
-This file contains setup instructions for the first live test. Do not put API keys, bot tokens, or database passwords in GitHub.
+Код пока не развёрнут и публикация по умолчанию выключена. Не помещайте ключи и пароли в GitHub.
 
-## 1. Create an isolated Neon project
+## 1. Neon: отдельная база без переплаты
 
-1. Open Neon and create a separate project named `football-news`. Do not reuse the football-manager database URL.
-2. Copy the connection string for the new database. Prefer the pooled connection string for an application worker.
-3. In Amvera, configure it as `DATABASE_URL`. Include SSL in the connection string as recommended by Neon, for example `?sslmode=require`.
-4. The app creates the initial `news_items` table during startup. Use a database/project owned by this bot only.
+1. Создайте проект Neon с именем football-news. Не используйте URL базы футбольного менеджера.
+2. Возьмите pooled connection string новой базы и задайте его в Amvera как DATABASE_URL, сохранив SSL-параметр sslmode=require, если он входит в выданную строку.
+3. Миграции запускаются автоматически при старте через alembic upgrade head. Схема первой версии находится в migrations/versions/0001_initial_schema.py.
+4. Для Free-плана на 29 октября 2026 года Neon указывает 1 GB хранилища и 100 CU-hours на проект в месяц. Следите за usage именно нового проекта: свободное место не означает бесконечные вычислительные часы.
+5. После подключения проверьте в Neon Console, что проект действительно создан на Free и его compute/storage usage в пределах лимитов. Я не имею доступа к вашей личной панели Neon, поэтому не могу проверить фактические настройки или оставшийся баланс аккаунта отсюда.
 
-## 2. Create and configure a Telegram bot
+## 2. Начните без платных API-вызовов
 
-1. Open BotFather in Telegram and create a bot.
-2. Store the token in Amvera as `TELEGRAM_BOT_TOKEN`.
-3. Add the bot to the target channel as an administrator with permission to post messages.
-4. Set `TELEGRAM_CHANNEL_ID` to the channel's `@username` or numeric chat ID.
-5. Check the bot and channel permissions with a manual test before turning on the worker.
+APP_MODE=collect_only включён по умолчанию. В этом режиме приложение может проверить соединение с Neon и наполнять таблицу RSS-кандидатами, но не вызывает DeepSeek и не ищет изображения.
 
-## 3. Configure DeepSeek
+Сначала задайте только DATABASE_URL и убедитесь, что в журнале есть сообщение о запуске и RSS-сборе. Для проверки реальных новостей используйте тестовый проект Neon, если не хотите смешивать тестовые и боевые данные.
 
-1. Create an API key in the official DeepSeek platform.
-2. Store it in Amvera as `DEEPSEEK_API_KEY`.
-3. Set `DEEPSEEK_BASE_URL=https://api.deepseek.com`.
-4. Set `DEEPSEEK_MODEL` to a model identifier enabled for the account. The example uses `deepseek-flash`; verify availability on the account before live launch.
-5. Set a spending alert/limit in the provider account where available. The bot currently limits how many news items it sends to the editorial model in each cycle, but the provider account should also have budget monitoring.
+## 3. DeepSeek: лимиты расходов
 
-## 4. Photo search
+1. Создайте ключ API в официальном кабинете DeepSeek и добавьте его только в защищённые переменные Amvera как DEEPSEEK_API_KEY.
+2. Оставьте DEEPSEEK_BASE_URL=https://api.deepseek.com и DEEPSEEK_MODEL=deepseek-flash.
+3. Перед режимом prepare проверьте текущие тарифы и доступность модели в аккаунте. Для расчёта приложение использует переменные DEEPSEEK_INPUT_PRICE_PER_MILLION_USD=0.30 и DEEPSEEK_OUTPUT_PRICE_PER_MILLION_USD=1.20, что соответствует консервативным peak-ценам из официальной страницы тарифов на дату проверки. Цены могут измениться.
+4. В коде установлены MAX_DEEPSEEK_CALLS_PER_DAY=30, DEEPSEEK_DAILY_BUDGET_USD=0.08 и DEEPSEEK_MAX_OUTPUT_TOKENS=700. Перед каждым запросом резервируется предполагаемая стоимость; после ответа она сверяется с токенами. Если лимит достигнут, очередь откладывается до следующего дня.
+5. Модель запускается с отключённым thinking-режимом, поскольку для короткой редакторской обработки RSS он не нужен. DeepSeek не используется для платных Search/Fetch endpoints: новости собираются из RSS.
+6. Это внутренние ограничители программы, а не абсолютный лимит биллинга провайдера. Если в кабинете DeepSeek доступны лимит баланса/уведомления, настройте их дополнительно.
 
-The first version searches Wikimedia Commons and only accepts clearly redistributable licenses (CC BY, CC BY-SA, CC0, and public-domain labels), omitting non-commercial licenses. It records the file page, license and author/credit. Attribution is included in the Telegram caption.
+## 4. Фотографии и лицензии
 
-Set `WIKIMEDIA_USER_AGENT` to a truthful contact string, preferably with an email address you control. A generic Wikimedia photo is clearly labelled as illustrative. If no reusable photo can be found after the configured attempts, the item is not published.
+Бот использует Wikimedia Commons, отбирает распространённые свободные лицензии и хранит URL страницы файла, автора/кредит, название и ссылку на лицензию. Фото ищется через API и загружается с ограничением размера и проверкой формата.
 
-Review Wikimedia Commons' current terms and each image's file page before production use. Automated license labels are an initial filter, not legal advice or a guarantee that every depicted person/event can be used for every commercial purpose.
+WIKIMEDIA_USER_AGENT обязательно замените на описательный User-Agent с настоящим контактным email. Режимы prepare и live не запустятся с примерным значением из .env.example.
 
-## 5. Deploy from GitHub to Amvera
+Условия конкретного изображения всё равно нужно уважать. Если подходящее лицензированное изображение не находится после ограниченных попыток, бот не публикует этот материал автоматически. Ищем только реальные фотографии, генерацию ИИ не используем.
 
-1. Create a new, separate Amvera project for the news bot.
-2. Connect this repository: `nikolenic66-hub/news`.
-3. Choose Dockerfile-based deployment. The repository includes a Dockerfile that starts `python -m app.main`.
-4. Add environment variables in Amvera project settings using `.env.example` as a checklist. Add real secrets only in the Amvera settings UI.
-5. Deploy and review logs. Expected startup includes `Football News Bot started`.
-6. Test with a private/test channel first. The code begins publishing automatically when the required secrets are configured and licensed-image candidates are available.
+## 5. Создание Telegram-бота
 
-## 6. Recommended first-run safeguards
+1. Создайте отдельного бота через BotFather.
+2. Сохраните его токен в Amvera как TELEGRAM_BOT_TOKEN.
+3. Добавьте бота администратором целевого тестового канала с правом публикации.
+4. Укажите TELEGRAM_CHANNEL_ID как @username канала или числовой ID.
+5. Пока APP_MODE не равен live, сообщения в канал не отправляются. Для тестирования публикации подготовьте отдельный закрытый канал.
 
-Before pointing it at a public audience, start with a test channel and reduce activity:
-- `MAX_POSTS_PER_DAY=2`
-- `PUBLISH_INTERVAL_MINUTES=240`
-- `PUBLISH_WINDOW_START_HOUR=9`
-- `PUBLISH_WINDOW_END_HOUR=21`
+## 6. Экономный запуск на Amvera
 
-Watch the logs for several cycles. Confirm source links, photo attribution, and text formatting. Then adjust to the planned maximum of 10 posts/day.
+В актуальной документации Amvera указано, что приложение тарифицируется поминутно и время в состоянии «Запущено», «Запускается» или «Ошибка» учитывается при списании. Поэтому постоянно работающий worker означает оплату и в часы без новых новостей.
 
-## 7. If the worker pauses
+В код добавлен режим одного цикла:
 
-A send request can time out after Telegram may already have accepted the post. Such rows are marked `uncertain`, and automated publishing pauses until the channel is checked. This is deliberate to avoid duplicate posts. After confirming the message was not delivered, an administrator can update the row's status manually in the database; inspect the exact row first.
+python -m app.main --once
 
-## 8. Secrets and privacy
+Возможные варианты:
+- Если Cron Jobs в вашем аккаунте позволяет запускать репозиторий/образ по расписанию с нужными переменными окружения, используйте --once каждые 15 минут и заранее проверьте, что списания идут только за фактическое выполнение.
+- Если Cron Jobs недоступен для вашего проекта или у него другая тарификация, используйте обычный worker. Он закрывает пул соединений после каждого цикла, чтобы Neon мог перейти в scale-to-zero.
 
-- Never commit a populated `.env` file, tokens, database URLs, or API keys.
-- The repository's `.gitignore` excludes `.env` files except `.env.example`.
-- Rotate any token immediately if it is accidentally exposed.
-- Repository visibility should be set to Private if you do not intend the source code to be public.
+Пример Quartz-расписания каждые 15 минут из синтаксиса Amvera: 0 0/15 * * * ?. Документация указывает, что расписание на сервере задаётся в UTC; учитывайте это при выборе окна публикаций.
+
+Не создавайте больше одной реплики worker: PostgreSQL advisory lock защищает от одновременных циклов, но запускать без необходимости несколько экземпляров не нужно.
+
+## 7. Безопасная последовательность запуска
+
+1. APP_MODE=collect_only: проверить миграции, базу, RSS и отсутствие API-расходов.
+2. APP_MODE=prepare: добавить DeepSeek-ключ и настоящий Wikimedia User-Agent. Проверить черновики, атрибуцию фото, расходы и качество минимум на нескольких циклах.
+3. В закрытом тестовом канале проверить sendPhoto, права бота, ссылки, формат HTML, лимит подписи и дневной лимит.
+4. Только после успешного теста добавить Telegram-переменные и поменять APP_MODE=live.
+5. Первые сутки можно дополнительно снизить MAX_POSTS_PER_DAY=2 и увеличить PUBLISH_INTERVAL_MINUTES=240, затем вернуть нужные значения.
+
+## 8. Поведение при сбоях
+
+- Если отправка в Telegram завершилась тайм-аутом и результат неизвестен, запись получает статус uncertain, а автоматические публикации приостанавливаются, чтобы не отправить дубликат. Сначала проверьте канал и только затем принимайте решение о повторе.
+- Если API-бюджет исчерпан, элементы не считаются неудачными и откладываются до следующего дня.
+- Повреждённое/слишком большое изображение не загружается в Telegram.
+- В collect_only и prepare публикации в Telegram отключены самим кодом.
+
+## 9. Данные и приватность
+
+- Не публикуйте настоящий .env, ключи и URL базы. Файл .gitignore настроен на исключение .env.
+- Репозиторий nikolenic66-hub/news сейчас публичный. Если не хотите раскрывать исходники, вручную переключите его в GitHub: Settings → General → Danger Zone → Change repository visibility → Private.
+- После случайной публикации секрета немедленно отзовите его и создайте новый.
