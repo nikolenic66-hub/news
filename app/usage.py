@@ -49,8 +49,9 @@ async def reserve_deepseek_call(
 ) -> UsageReservation:
     """Reserve worst-case costs before calling DeepSeek, so the queue cannot spend unchecked."""
     local_day = datetime.now(ZoneInfo(settings.app_timezone)).date()
-    # Two characters per token is intentionally conservative for mixed Russian/English text.
-    estimated_input_tokens = max(800, (max(0, prompt_characters) + 1) // 2)
+    # Russian prompts often use more tokens per character than English. Divide by 1.5
+    # and apply a minimum so the reservation errs high rather than bypassing the budget.
+    estimated_input_tokens = max(1_200, (max(0, prompt_characters) * 2 + 2) // 3)
     reserved = _cost(settings, estimated_input_tokens, settings.deepseek_max_output_tokens)
 
     async with sessions() as session:
