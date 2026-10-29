@@ -11,6 +11,8 @@ import httpx
 from app.config import Settings
 from app.models import NewsItem
 from app.text import clean_text, contains_ai_cliche
+from app.usage import reserve_deepseek_call, settle_deepseek_usage
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,7 @@ class EditorialDraft:
     photo_query: str = ""
 
 
-async def create_draft(client: httpx.AsyncClient, settings: Settings, item: NewsItem) -> EditorialDraft:
+async def create_draft(client: httpx.AsyncClient, sessions: async_sessionmaker, settings: Settings, item: NewsItem) -> EditorialDraft:
     pub_date = item.published_at_source
     if pub_date and pub_date.tzinfo is None:
         pub_date = pub_date.replace(tzinfo=timezone.utc)
@@ -54,6 +56,10 @@ async def create_draft(client: httpx.AsyncClient, settings: Settings, item: News
         "source_url": item.canonical_url,
         "instruction": "Сначала оцени достаточность фактов. Верни JSON по системным правилам.",
     }
+    serialized_payload = json.dumps(payload, ensure_ascii=False)
+    reservation = await reserve_deepseek_call(
+        sessions, settings, len(SYSTEM_PROMPT) + len(serialized_payload)
+    )
     response = await client.post(
         f"{settings.deepseek_base_url}/chat/completions",
         headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
@@ -61,11 +67,13 @@ async def create_draft(client: httpx.AsyncClient, settings: Settings, item: News
             "model": settings.deepseek_model,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                {"role": "user", "content": serialized_payload},
             ],
             "response_format": {"type": "json_object"},
+            # Thinking is unnecessary for short editorial rewrites and is disabled to avoid extra tokens.
+            "thinking": {"type": "disabled"},
             "temperature": 0.25,
-            "max_tokens": 900,
+            "max_tokens": settings.deepseek_max_output_tokens,
             "stream": False,
         },
         timeout=httpx.Timeout(45.0, connect=10.0),
@@ -74,6 +82,17 @@ async def create_draft(client: httpx.AsyncClient, settings: Settings, item: News
         # Do not log response bodies because provider errors can contain request metadata.
         raise RuntimeError(f"DeepSeek API returned HTTP {response.status_code}")
     data = response.json()
+    usage = data.get("usage") or {}
+    if "prompt_tokens" in usage and "completion_tokens" in usage:
+        await settle_deepseek_usage(
+            sessions,
+            settings,
+            reservation,
+            int(usage.get("prompt_tokens", 0)),
+            int(usage.get("completion_tokens", 0)),
+        )
+    else:
+        logger.warning("DeepSeek response had no usage counts; conservative reservation retained")
     choices = data.get("choices") or []
     if not choices or not choices[0].get("message", {}).get("content"):
         raise RuntimeError("DeepSeek returned an empty response")
