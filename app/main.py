@@ -108,17 +108,20 @@ async def main(once: bool = False, check: bool = False) -> None:
                 return
             logger.info(
                 "Football News Bot started; mode=%s, feeds=%d, max_posts=%d/day, "
-                "DeepSeek calls=%d/day, timezone=%s, once=%s",
+                "DeepSeek calls=%d/day, timezone=%s, once=%s, telegram_token_configured=%s",
                 settings.app_mode,
                 len(settings.rss_feeds),
                 settings.max_posts_per_day,
                 settings.max_deepseek_calls_per_day,
                 settings.app_timezone,
                 once,
+                bool(settings.telegram_bot_token),
             )
+            # Always start the task during continuous runs so missing token configuration
+            # is reported explicitly by run_private_bot instead of silently disabling it.
             telegram_task = (
                 asyncio.create_task(run_private_bot(client, settings), name="telegram-private-bot")
-                if settings.telegram_bot_token and not check
+                if not check
                 else None
             )
             try:
