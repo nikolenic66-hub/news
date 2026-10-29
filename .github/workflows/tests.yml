@@ -16,9 +16,11 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
-      - name: Compile application
-        run: python -m compileall -q app tests
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Compile application, migrations, and tests
+        run: python -m compileall -q app migrations tests
+      - name: Validate Alembic migration configuration
+        run: python -m alembic heads
       - name: Run tests
         run: python -m pytest -q
