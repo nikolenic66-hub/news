@@ -36,7 +36,12 @@ async def apply_migrations(settings: Settings) -> None:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
-    output, _ = await process.communicate()
+    try:
+        output, _ = await asyncio.wait_for(process.communicate(), timeout=60)
+    except asyncio.TimeoutError as exc:
+        process.kill()
+        await process.wait()
+        raise RuntimeError("Database migration timed out after 60 seconds") from exc
     if process.returncode != 0:
         text_output = output.decode("utf-8", errors="replace")
         # Never echo a raw secret-bearing connection string to logs.
@@ -102,8 +107,10 @@ async def main(once: bool = False) -> None:
                 except asyncio.CancelledError:
                     raise
                 except Exception:
-                    # A bad feed/API response should not permanently stop a continuous worker.
+                    # A scheduled one-shot run should report failure to the scheduler.
                     logger.exception("Unexpected pipeline cycle error")
+                    if once:
+                        raise
                 finally:
                     # Return idle connections so Neon can scale to zero between polling cycles.
                     await engine.dispose()
