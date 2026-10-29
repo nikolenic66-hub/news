@@ -17,6 +17,8 @@ target_metadata = Base.metadata
 def run_migrations_offline() -> None:
     settings = Settings.from_env()
     url, _ = make_database_url(settings.database_url)
+    # Offline SQL generation uses PostgreSQL's base dialect, not the async driver name.
+    url = url.set(drivername="postgresql")
     context.configure(
         url=url.render_as_string(hide_password=True),
         target_metadata=target_metadata,
