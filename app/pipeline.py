@@ -50,6 +50,24 @@ def _timestamp(value: datetime | None) -> datetime | None:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
+async def expire_stale_candidates(session: AsyncSession, settings: Settings) -> int:
+    cutoff = _now_utc() - timedelta(hours=settings.max_news_age_hours)
+    result = await session.execute(
+        select(NewsItem).where(
+            NewsItem.status.in_({"new", "processing", "awaiting_photo", "queued"}),
+            or_(NewsItem.published_at_source.is_(None), NewsItem.published_at_source < cutoff),
+        )
+    )
+    items = list(result.scalars().all())
+    for item in items:
+        item.status = "rejected"
+        item.last_error = "News source is missing a date or became stale before publication"
+    if items:
+        await session.commit()
+        logger.info("Expired %d stale news candidates", len(items))
+    return len(items)
+
+
 async def collect_news(session: AsyncSession, client: httpx.AsyncClient, settings: Settings) -> int:
     entries = await fetch_all_feeds(client, settings.rss_feeds)
     if not entries:
@@ -217,6 +235,11 @@ async def publish_one_due(session: AsyncSession, client: httpx.AsyncClient,
     if local_now.hour < settings.publish_window_start_hour or local_now.hour >= settings.publish_window_end_hour:
         return False
 
+    unresolved = await session.scalar(select(func.count(NewsItem.id)).where(NewsItem.status == "uncertain"))
+    if int(unresolved or 0) > 0:
+        logger.error("Publishing paused: a previous Telegram send has uncertain delivery; inspect the channel before retrying")
+        return False
+
     count = await _daily_published_count(session, local_now, settings.app_timezone)
     if count >= settings.max_posts_per_day:
         return False
@@ -317,6 +340,7 @@ async def run_cycle(sessions: async_sessionmaker, client: httpx.AsyncClient, set
     async with sessions() as session:
         await recover_stale_processing(session)
         await recover_stale_sends(session)
+        await expire_stale_candidates(session, settings)
         await collect_news(session, client, settings)
         await process_new_items(session, client, settings)
         await attach_licensed_photos(session, client, settings)
