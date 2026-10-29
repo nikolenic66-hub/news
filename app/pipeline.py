@@ -8,7 +8,7 @@ from difflib import SequenceMatcher
 from zoneinfo import ZoneInfo
 
 import httpx
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import Settings
@@ -49,6 +49,22 @@ def _timestamp(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+async def cleanup_terminal_history(session: AsyncSession, settings: Settings) -> int:
+    """Bound table growth while preserving published/rejected history for the configured window."""
+    cutoff = _now_utc() - timedelta(days=settings.db_retention_days)
+    result = await session.execute(
+        delete(NewsItem).where(
+            NewsItem.status.in_({"published", "rejected", "failed"}),
+            NewsItem.created_at < cutoff,
+        )
+    )
+    removed = max(0, int(result.rowcount or 0))
+    if removed:
+        await session.commit()
+        logger.info("Pruned %d terminal news rows older than %d days", removed, settings.db_retention_days)
+    return removed
 
 
 async def expire_stale_candidates(session: AsyncSession, settings: Settings) -> int:
@@ -349,6 +365,7 @@ async def run_cycle(sessions: async_sessionmaker, client: httpx.AsyncClient, set
     async with sessions() as session:
         await recover_stale_processing(session)
         await recover_stale_sends(session)
+        await cleanup_terminal_history(session, settings)
         await expire_stale_candidates(session, settings)
         await collect_news(session, client, settings)
         if settings.app_mode == "collect_only":
