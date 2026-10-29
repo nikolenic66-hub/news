@@ -20,7 +20,11 @@ jobs:
         run: python -m pip install -r requirements-dev.txt
       - name: Compile application, migrations, and tests
         run: python -m compileall -q app migrations tests
-      - name: Validate Alembic migration configuration
+      - name: Validate Alembic configuration
         run: python -m alembic heads
+      - name: Render migration SQL without connecting to a live database
+        env:
+          DATABASE_URL: postgresql://news:news@localhost/news
+        run: python -m alembic upgrade --sql head
       - name: Run tests
         run: python -m pytest -q
