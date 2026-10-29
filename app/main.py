@@ -120,7 +120,7 @@ async def main(once: bool = False, check: bool = False) -> None:
             # Always start the task during continuous runs so missing token configuration
             # is reported explicitly by run_private_bot instead of silently disabling it.
             telegram_task = (
-                asyncio.create_task(run_private_bot(client, settings), name="telegram-private-bot")
+                asyncio.create_task(run_private_bot(client, settings, sessions), name="telegram-private-bot")
                 if not check
                 else None
             )
