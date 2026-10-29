@@ -119,10 +119,14 @@ class Settings:
                 missing.append("TELEGRAM_CHANNEL_ID")
         if missing:
             raise RuntimeError("Missing required environment variables for APP_MODE=" + self.app_mode + ": " + ", ".join(missing))
+        if self.database_url and urlsplit(self.database_url).scheme not in {"postgres", "postgresql", "postgresql+asyncpg"}:
+            raise RuntimeError("DATABASE_URL must be a PostgreSQL connection URL")
         if not self.rss_feeds:
             raise RuntimeError("RSS_FEEDS must contain at least one feed URL")
         if self.app_mode in {"prepare", "live"} and urlsplit(self.deepseek_base_url).scheme != "https":
             raise RuntimeError("DEEPSEEK_BASE_URL must use HTTPS")
+        if self.app_mode in {"prepare", "live"} and ("example.com" in self.wikimedia_user_agent or "configure-admin-email" in self.wikimedia_user_agent):
+            raise RuntimeError("Set WIKIMEDIA_USER_AGENT to a descriptive value with a real contact before enabling photo search")
         if self.deepseek_daily_budget_usd <= 0:
             raise RuntimeError("DEEPSEEK_DAILY_BUDGET_USD must be > 0")
         if self.deepseek_input_price_per_million_usd < 0 or self.deepseek_output_price_per_million_usd < 0:
