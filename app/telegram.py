@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -34,16 +35,48 @@ class TelegramPostResult:
 async def download_photo(client: httpx.AsyncClient, item: NewsItem, max_bytes: int) -> tuple[bytes, str]:
     if not item.photo_url:
         raise ValueError("Queued item has no image URL")
-    response = await client.get(item.photo_url, timeout=httpx.Timeout(30.0, connect=10.0))
-    response.raise_for_status()
-    content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-    if content_type not in {"image/jpeg", "image/png", "image/webp"}:
-        raise ValueError(f"Unsupported image content type: {content_type or 'unknown'}")
-    data = response.content
-    if not data or len(data) > max_bytes:
-        raise ValueError("Downloaded image is empty or exceeds configured size limit")
-    return data, content_type
+    parsed = urlsplit(item.photo_url)
+    if parsed.scheme != "https" or parsed.hostname != "upload.wikimedia.org":
+        raise ValueError("Photo URL is outside the approved Wikimedia upload host")
 
+    chunks: list[bytes] = []
+    total = 0
+    async with client.stream(
+        "GET",
+        item.photo_url,
+        timeout=httpx.Timeout(30.0, connect=10.0),
+        follow_redirects=False,
+    ) as response:
+        response.raise_for_status()
+        if urlsplit(str(response.url)).hostname != "upload.wikimedia.org":
+            raise ValueError("Photo response host is not approved")
+        content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+            raise ValueError(f"Unsupported image content type: {content_type or 'unknown'}")
+        content_length = response.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > max_bytes:
+                    raise ValueError("Image exceeds configured size limit")
+            except ValueError as exc:
+                if str(exc) == "Image exceeds configured size limit":
+                    raise
+                # Ignore malformed Content-Length and enforce the streaming limit instead.
+        async for chunk in response.aiter_bytes():
+            total += len(chunk)
+            if total > max_bytes:
+                raise ValueError("Image exceeds configured size limit")
+            chunks.append(chunk)
+
+    data = b"".join(chunks)
+    valid_signature = (
+        (content_type == "image/jpeg" and data.startswith(b"\xff\xd8\xff"))
+        or (content_type == "image/png" and data.startswith(b"\x89PNG\r\n\x1a\n"))
+        or (content_type == "image/webp" and len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP")
+    )
+    if not data or not valid_signature:
+        raise ValueError("Downloaded file is empty or its signature does not match the image content type")
+    return data, content_type
 
 async def publish_photo(client: httpx.AsyncClient, settings: Settings, item: NewsItem,
                         image_bytes: bytes, content_type: str) -> TelegramPostResult:
