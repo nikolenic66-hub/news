@@ -108,7 +108,8 @@ async def _search_once(client: httpx.AsyncClient, settings: Settings, query: str
         meta_text = f"{page.get('title', '')} {description}"
         overlap = len(wanted & _tokens(meta_text))
         needed = 2 if len(wanted) >= 3 else (1 if wanted else 0)
-        weak_match = overlap < needed
+        # If the query contains no distinguishing terms, this is a generic illustration, not an event-specific photo.
+        weak_match = not wanted or overlap < needed
         photo = LicensedPhoto(
             image_url=image_url,
             page_url=page_url,
