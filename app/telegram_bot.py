@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from html import escape
 
 import httpx
@@ -79,7 +80,7 @@ async def run_private_bot(client: httpx.AsyncClient, settings: Settings) -> None
                     greeting = ""
                 items = await fetch_all_feeds(client, settings.rss_feeds)
                 # RSS entries are already newest-first for the configured sources; sort defensively.
-                items.sort(key=lambda item: item.published_at or __import__("datetime").datetime.min.replace(tzinfo=__import__("datetime").timezone.utc), reverse=True)
+                items.sort(key=lambda item: item.published_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
                 news = _format_news(items)
                 reply = f"{escape(greeting)}\n\n{news}" if greeting else news
                 await _send_message(client, token, chat_id, reply)
