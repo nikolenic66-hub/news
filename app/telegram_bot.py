@@ -29,6 +29,36 @@ _FOOTBALL_MARKERS = (
     "bundesliga", "europa league", "world cup", "euros",
 )
 
+_WOMENS_FOOTBALL_MARKERS = (
+    "женск", "женщин", "женская", "женской", "женский футбол",
+    "women", "woman", "women's", "womens", "femení", "femeni",
+    "femenino", "feminino", "liga f", "uwcl",
+)
+_WOMENS_BARCA_REAL_MARKERS = (
+    "барселона", "барса", "barcelona", "barça", "real madrid",
+    "реал мадрид", "реал",
+)
+_MATCH_MARKERS = (
+    "матч", "встреч", "сыгра", "обыгра", "побед", "проигра",
+    "ничь", "гол", "разгром", "match", "beat", "defeat", "draw",
+    "win", "lost", "score",
+)
+
+
+def _is_allowed_football_item(item: FeedItem) -> bool:
+    searchable = f"{item.title} {item.summary[:1200]}".casefold()
+    if not any(marker in searchable for marker in _FOOTBALL_MARKERS):
+        return False
+    if any(marker in searchable for marker in _WOMENS_FOOTBALL_MARKERS):
+        # Women's football is excluded completely, except match reports
+        # involving Barcelona or Real Madrid, as explicitly requested.
+        has_allowed_club = any(marker in searchable for marker in _WOMENS_BARCA_REAL_MARKERS)
+        has_match_context = any(marker in searchable for marker in _MATCH_MARKERS)
+        if not (has_allowed_club and has_match_context):
+            return False
+    return True
+
+
 _IMPORTANCE_TERMS = {
     "transfer": 5, "signs": 4, "signed": 4, "sack": 4, "sacked": 4,
     "resigns": 4, "injury": 3, "injured": 3, "champions league": 5,
@@ -99,8 +129,7 @@ async def _prepare_top_news(
         # Some supplementary feeds cover several sports. Keep only clearly
         # football-related entries so hockey, tennis and other noise never
         # reaches the editorial model.
-        searchable = f"{item.title} {item.summary[:1200]}".casefold()
-        if not any(marker in searchable for marker in _FOOTBALL_MARKERS):
+        if not _is_allowed_football_item(item):
             continue
         published = item.published_at
         if not published:
