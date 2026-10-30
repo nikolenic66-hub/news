@@ -11,8 +11,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_FEEDS = (
+    # International football coverage.
     "https://feeds.bbci.co.uk/sport/football/rss.xml",
     "https://www.theguardian.com/football/rss",
+    # Russian football-first sources.
+    "https://www.sport-express.ru/services/materials/news/football/se/",
+    "https://www.sport-express.ru/services/materials/news/transfers/se/",
+    "https://www.championat.com/rss/news/football/",
+    "https://www.sports.ru/rss/rubric.xml?s=208",
+    "https://news.sportbox.ru/taxonomy/term/118/0/feed",
+    "https://www.euro-football.ru/feed",
+    "https://www.euro-football.ru/category/rss/29",
+    "https://www.euro-football.ru/category/rss/45",
+    "https://www.sport.ru/rssfeeds/news.rss",
+    # Broad sports feeds are supplementary; football filtering is applied downstream.
+    "https://www.sports.ru/rss/topnews.xml",
+    "https://static.feed.rbc.ru/rbc/logical/footer/sport_newsline.rss",
+    "https://lenta.ru/rss/news/sport/",
 )
 APP_MODES = {"collect_only", "prepare", "live"}
 
