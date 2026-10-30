@@ -159,7 +159,7 @@ def _rank(item: FeedItem, now: datetime) -> float:
 
 
 def _format_news_item(title: str, body: str) -> str:
-    return f"<b>{escape(title)}</b>\\n\\n{escape(body)}"
+    return f"<b>{escape(title)}</b>\n\n{escape(body)}"
 
 
 async def _send_message(client: httpx.AsyncClient, token: str, chat_id: int, text: str) -> None:
@@ -227,6 +227,13 @@ async def _prepare_top_news(
             )
             continue
         if draft.publish:
+            duplicate = any(
+                _are_duplicate_stories(draft.title, draft.body, old_title, old_body)
+                for old_title, old_body in prepared
+            )
+            if duplicate:
+                logger.info("Skipped duplicate editorial draft after DeepSeek: %s", draft.title[:120])
+                continue
             prepared.append((draft.title, draft.body))
         if len(prepared) >= 3:
             break
