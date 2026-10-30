@@ -13,6 +13,7 @@ from app.config import Settings
 from app.editor import create_draft
 from app.models import NewsItem
 from app.sources import FeedItem, fetch_all_feeds
+from app.usage import DeepSeekBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -122,11 +123,20 @@ async def _prepare_top_news(
         )
         try:
             draft = await create_draft(client, sessions, settings, draft_item)
-        except Exception as exc:
-            logger.warning("Editorial API failed while preparing /news (%s)", exc.__class__.__name__)
+        except DeepSeekBudgetExceeded as exc:
+            logger.warning("DeepSeek daily limit reached while preparing /news: %s", str(exc))
             if not prepared:
                 raise
             break
+        except Exception as exc:
+            # A single provider timeout, malformed answer or rejected RSS item
+            # must not cancel the entire /news response. Try the next candidate.
+            logger.warning(
+                "Editorial API failed for one candidate (%s: %s)",
+                exc.__class__.__name__,
+                str(exc)[:180],
+            )
+            continue
         if draft.publish:
             prepared.append((draft.title, draft.body))
         if len(prepared) >= 3:
@@ -186,10 +196,11 @@ async def run_private_bot(
                     logger.info("Prepared %d Russian football news stories for /news", len(drafts))
                 except Exception as exc:
                     logger.warning("Could not prepare /news response (%s)", exc.__class__.__name__)
-                    await _send_message(
-                        client, token, chat_id,
-                        "Не удалось подготовить новости через редактор ИИ. Проверь настройки DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL и DEEPSEEK_MODEL, затем попробуй /news ещё раз.",
-                    )
+                    if isinstance(exc, DeepSeekBudgetExceeded):
+                        error_text = "Сегодня исчерпан дневной лимит запросов или бюджета ИИ. Попробуй снова завтра."
+                    else:
+                        error_text = "Сейчас редактор ИИ временно недоступен. Я записал техническую причину в журнал приложения. Попробуй /news немного позже."
+                    await _send_message(client, token, chat_id, error_text)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
