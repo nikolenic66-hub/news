@@ -16,6 +16,18 @@ from app.sources import FeedItem, fetch_all_feeds
 
 logger = logging.getLogger(__name__)
 
+_FOOTBALL_MARKERS = (
+    "футбол", "футболь", "рпл", "апл", "ла лига", "серия а", "бундеслиг",
+    "лига чемпионов", "лига европы", "лига конференций", "кубок россии",
+    "кубок англии", "чемпионат мира", "чемпионат европы", "сборная россии",
+    "премьер-лиг", "первой лиги", "первая лига", "суперкубок",
+    "манчестер", "ливерпуль", "арсенал", "челси", "реал мадрид", "барселона",
+    "бавария", "псж", "интер", "милан", "ювентус", "атлетико", "тоттенхэм",
+    "мбаппе", "месси", "роналду", "холанд", "салах", "неймар", "винiciус",
+    "football", "champions league", "premier league", "la liga", "serie a",
+    "bundesliga", "europa league", "world cup", "euros",
+)
+
 _IMPORTANCE_TERMS = {
     "transfer": 5, "signs": 4, "signed": 4, "sack": 4, "sacked": 4,
     "resigns": 4, "injury": 3, "injured": 3, "champions league": 5,
@@ -83,6 +95,12 @@ async def _prepare_top_news(
     cutoff = now - timedelta(hours=settings.max_news_age_hours)
     fresh = []
     for item in items:
+        # Some supplementary feeds cover several sports. Keep only clearly
+        # football-related entries so hockey, tennis and other noise never
+        # reaches the editorial model.
+        searchable = f"{item.title} {item.summary[:1200]}".casefold()
+        if not any(marker in searchable for marker in _FOOTBALL_MARKERS):
+            continue
         published = item.published_at
         if not published:
             continue
