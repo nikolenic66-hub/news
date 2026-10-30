@@ -28,6 +28,7 @@ DEFAULT_FEEDS = (
     "https://www.sports.ru/rss/topnews.xml",
     "https://static.feed.rbc.ru/rbc/logical/footer/sport_newsline.rss",
     "https://lenta.ru/rss/news/sport/",
+    "https://ria.ru/export/sport/rss2/index.xml?page_type=google_newsstand",
 )
 APP_MODES = {"collect_only", "prepare", "live"}
 
