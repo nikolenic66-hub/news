@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+from difflib import SequenceMatcher
 from datetime import datetime, timedelta, timezone
 from html import escape
 
@@ -72,6 +74,69 @@ _IMPORTANCE_TERMS = {
 }
 
 
+_DUPLICATE_STOPWORDS = {
+    "а", "без", "был", "была", "были", "быть", "в", "во", "для", "до",
+    "его", "ее", "её", "если", "за", "и", "из", "или", "к", "как",
+    "команда", "клуб", "лига", "матч", "между", "на", "над", "не",
+    "но", "о", "об", "от", "после", "по", "под", "при", "с", "со",
+    "стал", "стала", "стали", "у", "футбол", "футбола", "футболу",
+    "чемпионат", "это", "the", "a", "an", "and", "in", "of", "to",
+    "football", "match", "club", "team",
+}
+
+
+def _duplicate_text(title: str, summary: str = "") -> tuple[str, set[str]]:
+    raw = f"{title} {summary[:700]}".casefold().replace("ё", "е")
+    tokens = set(re.findall(r"[a-zа-я0-9]+", raw))
+    useful = {token for token in tokens if len(token) > 2 and token not in _DUPLICATE_STOPWORDS}
+    compact_title = " ".join(
+        token for token in re.findall(r"[a-zа-я0-9]+", title.casefold().replace("ё", "е"))
+        if len(token) > 2 and token not in _DUPLICATE_STOPWORDS
+    )
+    return compact_title, useful
+
+
+def _are_duplicate_stories(
+    left_title: str, left_summary: str, right_title: str, right_summary: str
+) -> bool:
+    left_compact, left_tokens = _duplicate_text(left_title, left_summary)
+    right_compact, right_tokens = _duplicate_text(right_title, right_summary)
+    if not left_tokens or not right_tokens:
+        return False
+    overlap = len(left_tokens & right_tokens) / max(1, min(len(left_tokens), len(right_tokens)))
+    title_similarity = SequenceMatcher(None, left_compact, right_compact).ratio()
+    return overlap >= 0.62 or title_similarity >= 0.78
+
+
+def _deduplicate_feed_items(items: list[FeedItem], now: datetime) -> list[FeedItem]:
+    """Keep the strongest representative of each story before spending DeepSeek calls."""
+    ranked = sorted(items, key=lambda item: _rank(item, now), reverse=True)
+    unique: list[FeedItem] = []
+    for item in ranked:
+        if any(
+            _are_duplicate_stories(item.title, item.summary or "", kept.title, kept.summary or "")
+            for kept in unique
+        ):
+            logger.info("Skipped duplicate RSS story before DeepSeek: %s", item.title[:120])
+            continue
+        unique.append(item)
+    return unique
+
+
+def _deduplicate_drafts(drafts: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Second duplicate guard after editorial rewriting changes titles and wording."""
+    unique: list[tuple[str, str]] = []
+    for title, body in drafts:
+        if any(
+            _are_duplicate_stories(title, body, kept_title, kept_body)
+            for kept_title, kept_body in unique
+        ):
+            logger.info("Skipped duplicate editorial draft after DeepSeek: %s", title[:120])
+            continue
+        unique.append((title, body))
+    return unique
+
+
 def _rank(item: FeedItem, now: datetime) -> float:
     title = item.title.casefold()
     summary = (item.summary or "").casefold()
@@ -93,13 +158,8 @@ def _rank(item: FeedItem, now: datetime) -> float:
     return score
 
 
-def _format_news(drafts: list[tuple[str, str]]) -> str:
-    if not drafts:
-        return "Пока не получилось подготовить достоверные новости. Попробуй ещё раз чуть позже командой /news."
-    blocks = ["⚽ <b>Главное в футболе</b>"]
-    for title, body in drafts:
-        blocks.append(f"\n\n<b>{escape(title)}</b>\n{escape(body)}")
-    return "\n".join(blocks)[:3900]
+def _format_news_item(title: str, body: str) -> str:
+    return f"<b>{escape(title)}</b>\\n\\n{escape(body)}"
 
 
 async def _send_message(client: httpx.AsyncClient, token: str, chat_id: int, text: str) -> None:
@@ -138,11 +198,11 @@ async def _prepare_top_news(
             published = published.replace(tzinfo=timezone.utc)
         if cutoff <= published.astimezone(timezone.utc) <= now + timedelta(hours=1):
             fresh.append(item)
-    fresh.sort(key=lambda item: _rank(item, now), reverse=True)
+    fresh = _deduplicate_feed_items(fresh, now)
 
     prepared: list[tuple[str, str]] = []
-    # Limit API spend per command. The editorial layer rejects weak or unclear stories.
-    for source in fresh[:5]:
+    # Limit API spend per command. Duplicates are removed before any paid editorial call.
+    for source in fresh[:8]:
         draft_item = NewsItem(
             canonical_url=source.url,
             source_name=source.source_name,
@@ -170,7 +230,7 @@ async def _prepare_top_news(
             prepared.append((draft.title, draft.body))
         if len(prepared) >= 3:
             break
-    return prepared
+    return _deduplicate_drafts(prepared)[:3]
 
 
 async def run_private_bot(
@@ -221,8 +281,16 @@ async def run_private_bot(
                 await _send_message(client, token, chat_id, "🔎 Отбираю главные новости и готовлю русскоязычные материалы. Это займёт несколько секунд.")
                 try:
                     drafts = await _prepare_top_news(client, sessions, settings)
-                    await _send_message(client, token, chat_id, _format_news(drafts))
-                    logger.info("Prepared %d Russian football news stories for /news", len(drafts))
+                    if not drafts:
+                        await _send_message(
+                            client, token, chat_id,
+                            "Пока не нашёл достаточно важных и неповторяющихся футбольных новостей. Попробуй позже командой /news.",
+                        )
+                    else:
+                        await _send_message(client, token, chat_id, "⚽ <b>Главное в футболе</b>")
+                        for title, body in drafts:
+                            await _send_message(client, token, chat_id, _format_news_item(title, body))
+                    logger.info("Prepared %d unique Russian football news stories for /news", len(drafts))
                 except Exception as exc:
                     logger.warning("Could not prepare /news response (%s)", exc.__class__.__name__)
                     if isinstance(exc, DeepSeekBudgetExceeded):
