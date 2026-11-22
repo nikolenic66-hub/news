@@ -73,7 +73,7 @@ async def group_message(m: Message):
     await add_message(m.chat.id,user.id,user.username,display,'user',f'{display} ({uname}): {incoming}')
     me=await bot.get_me()
     direct=bool((me.username and f'@{me.username.lower()}' in incoming.lower()) or
-                (m.reply_to_message and m.reply_to_message.from_user and m.reply_to_message.from_user.id==me.id)
+                (m.reply_to_message and m.reply_to_message.from_user and m.reply_to_message.from_user.id==me.id))
     now=time.monotonic()
     if not direct and (random.random()>=activity or now-last_spontaneous.get(m.chat.id,0)<90): return
     mem=await get_memory(m.chat.id)
