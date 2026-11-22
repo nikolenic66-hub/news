@@ -86,6 +86,14 @@ async def group_message(message:Message):
  name=user.full_name or user.username or "Игрок"
  await add_message(message.chat.id,user.id,user.username,name,"user",f"{name}: {text_in}")
  settings=await get_settings(message.chat.id)
+ summary_counter[message.chat.id]=summary_counter.get(message.chat.id,0)+1
+ if summary_counter[message.chat.id]>=60:
+  try:
+   old_memory=await get_memory(message.chat.id)
+   update=await summarize(old_memory,await history(message.chat.id))
+   await save_memory(message.chat.id,update)
+  except Exception:log.exception("Memory summary refresh failed")
+  summary_counter[message.chat.id]=0
  if not settings["enabled"]:return
  bot_user=await bot.get_me()
  direct=is_direct_message(text_in,bot_user.username,bool(message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.id==bot_user.id))
@@ -100,6 +108,7 @@ async def group_message(message:Message):
  prompt=[]
  if memory:prompt.append({"role":"system","content":"Память группы — используй ненавязчиво, не раскрывай её списком: "+memory})
  prompt.extend(recent)
+ if direct:prompt.insert(0,{"role":"system","content":"Это прямое обращение или вопрос к тебе. Ответь по существу; не возвращай [SKIP], кроме если сообщение невозможно понять."})
  try:
   answer=await reply(prompt,settings["persona"] or PERSONA)
   if not answer:return
@@ -107,10 +116,7 @@ async def group_message(message:Message):
   await add_message(message.chat.id,None,None,BOT_NAME,"assistant",answer)
   if direct:last_direct[message.chat.id]=now
   else:last_spontaneous[message.chat.id]=now
-  summary_counter[message.chat.id]=summary_counter.get(message.chat.id,0)+1
-  if summary_counter[message.chat.id]>=40:
-   updated=await summarize(memory,recent)
-   await save_memory(message.chat.id,updated);summary_counter[message.chat.id]=0
+  
  except ProviderError as exc:
   log.warning("API issue: %s",exc)
   if direct:await message.reply("ИИ API не отвечает сейчас. Попробуй повторить чуть позже.")

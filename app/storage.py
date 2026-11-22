@@ -58,6 +58,6 @@ async def user_count(chat_id):
 
 async def clear_chat(chat_id):
  async with aiosqlite.connect(DB_PATH) as db:
-  for table in ("messages","users","group_memory","settings"):
+  for table in ("messages","users","group_memory"):
    await db.execute(f"DELETE FROM {table} WHERE chat_id=?",(chat_id,))
   await db.commit()
