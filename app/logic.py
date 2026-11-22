@@ -1,0 +1,7 @@
+import re
+FC_WORDS=re.compile(r"(?i)(fc mobile|fcm|fcmobile|фк мобайл|фкм|овр|ovr|состав|карта игрока|карточк|обмен|ранг|дивизион|ивент|тактик|дриблинг|пак|квик селл|quick sell|рейтингов|гем|звезд|кампания)")
+def is_fc_topic(text:str)->bool:return bool(FC_WORDS.search(text or ""))
+def is_direct_message(text:str,bot_username:str|None,reply_to_bot:bool)->bool:
+ return bool(bot_username and ("@"+bot_username.lower()) in (text or "").lower()) or reply_to_bot
+def should_spontaneously_reply(text:str,activity:float,random_value:float,cooldown_elapsed:float,cooldown_seconds:float=240)->bool:
+ return is_fc_topic(text) and cooldown_elapsed>=cooldown_seconds and random_value<max(0.0,min(.5,activity))
