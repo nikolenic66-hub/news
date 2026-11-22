@@ -10,8 +10,8 @@ from .ai import reply,summarize,ProviderError
 logging.basicConfig(level=logging.INFO);log=logging.getLogger("fc-mate")
 if not BOT_TOKEN:raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
 bot=Bot(BOT_TOKEN);dp=Dispatcher()
-last_spontaneous={};last_direct={};summary_counter={};last_group_reminder={}
-TOURNAMENT_COOLDOWN=45*60;GROUP_REMINDER_COOLDOWN=10*60
+last_spontaneous={};last_direct={};summary_counter={}
+TOURNAMENT_COOLDOWN=45*60
 async def is_admin(message:Message):
  if not message.from_user:return False
  if message.from_user.id in ADMIN_IDS:return True
@@ -107,6 +107,7 @@ async def clear_command(message:Message):
 async def group_message(message:Message):
  user=message.from_user;text_in=(message.text or "").strip()
  if not user or user.is_bot or not text_in or text_in.startswith("/"):return
+ now=time.time()
  name=user.full_name or user.username or "Игрок"
  await add_message(message.chat.id,user.id,user.username,name,"user",f"{name}: {text_in}")
  settings=await get_settings(message.chat.id)
@@ -121,6 +122,7 @@ async def group_message(message:Message):
  direct=is_direct_message(text_in,bot_user.username,bool(message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.id==bot_user.id))
  if direct:
   if now-last_direct.get(message.chat.id,0)<12:return
+  last_direct[message.chat.id]=now
  else:
   chance=REPLY_PROBABILITY if settings["activity"] is None else settings["activity"]
   elapsed=now-last_spontaneous.get(message.chat.id,0)
@@ -133,8 +135,7 @@ async def group_message(message:Message):
   answer=await reply(prompt,settings["persona"] or PERSONA)
   if not answer:return
   await message.reply(answer[:4000]);await add_message(message.chat.id,None,None,BOT_NAME,"assistant",answer)
-  if direct:last_direct[message.chat.id]=now
-  else:last_spontaneous[message.chat.id]=now
+  if not direct:last_spontaneous[message.chat.id]=now
  except ProviderError as exc:
   log.warning("API issue: %s",exc)
   if direct:await message.reply("ИИ API не отвечает сейчас. Попробуй повторить чуть позже.")
@@ -147,7 +148,12 @@ async def tournament_reminder_loop():
   await asyncio.sleep(15*60)
   now=time.time()
   try:
-   for chat_id in await get_missed_chats():
+   chats=await get_missed_chats()
+  except Exception:
+   log.exception("Could not load tournament reminder chats")
+   continue
+  for chat_id in chats:
+   try:
     due=[row for row in await get_missed(chat_id) if now-row[4]>=TOURNAMENT_COOLDOWN]
     if not due:continue
     uid,username,display,tournament,last_rem=due[0]
@@ -155,7 +161,8 @@ async def tournament_reminder_loop():
     roast=f"{mention}, опять пропустил «{tournament}»? 😤 Турнир не пройдёт сам, даже если ты очень талантливо игнорируешь сетку. Залетай и закрывай долг!"
     await bot.send_message(chat_id,roast)
     await update_reminder(chat_id,uid,now)
-  except Exception:log.exception("Tournament reminder scheduler failed")
+   except Exception:
+    log.exception("Tournament reminder failed for chat %s",chat_id)
 
 async def main():
  await init_db();log.info("FC Mate is running")
