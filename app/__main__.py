@@ -4,7 +4,7 @@ from aiogram.filters import Command,CommandStart
 from aiogram.types import Message
 from aiogram.enums import ChatType
 from .config import BOT_TOKEN,BOT_NAME,PERSONA,ADMIN_IDS,REPLY_PROBABILITY
-from .storage import init_db,add_message,history,get_memory,save_memory,get_settings,set_setting,user_count,clear_chat,mark_missed,get_missed,find_user,remove_missed,update_reminder
+from .storage import init_db,add_message,history,get_memory,save_memory,get_settings,set_setting,user_count,clear_chat,mark_missed,get_missed,find_user,remove_missed,update_reminder,get_missed_chats
 from .logic import is_fc_topic,is_direct_message,should_spontaneously_reply
 from .ai import reply,summarize,ProviderError
 logging.basicConfig(level=logging.INFO);log=logging.getLogger("fc-mate")
@@ -116,13 +116,6 @@ async def group_message(message:Message):
    old_memory=await get_memory(message.chat.id);update=await summarize(old_memory,await history(message.chat.id));await save_memory(message.chat.id,update)
   except Exception:log.exception("Memory summary refresh failed")
   summary_counter[message.chat.id]=0
- # Remind a tournament absentee in the group; cooldown per person (45 min) and per group (10 min).
- overdue=await get_missed(message.chat.id);now=time.time()
- due=[row for row in overdue if now-row[4]>=TOURNAMENT_COOLDOWN]
- if due and now-last_group_reminder.get(message.chat.id,0)>=GROUP_REMINDER_COOLDOWN:
-  uid,uname,display,tournament,last_rem=due[0];mention=f"@{uname}" if uname else display
-  nag=f"{mention}, турнир «{tournament}» сам себя не сыграет 😤 Опять тебя ждём — хватит коллекционировать пропуски, залетай и закрывай долг!"
-  await message.reply(nag);await update_reminder(message.chat.id,uid,now);last_group_reminder[message.chat.id]=now
  if not settings["enabled"]:return
  bot_user=await bot.get_me()
  direct=is_direct_message(text_in,bot_user.username,bool(message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.id==bot_user.id))
@@ -148,7 +141,24 @@ async def group_message(message:Message):
  except Exception:
   log.exception("Unexpected group handler error")
   if direct:await message.reply("У меня техническая заминка, попробуй ещё раз.")
+
+async def tournament_reminder_loop():
+ while True:
+  await asyncio.sleep(15*60)
+  now=time.time()
+  try:
+   for chat_id in await get_missed_chats():
+    due=[row for row in await get_missed(chat_id) if now-row[4]>=TOURNAMENT_COOLDOWN]
+    if not due:continue
+    uid,username,display,tournament,last_rem=due[0]
+    mention=f"@{username}" if username else display
+    roast=f"{mention}, опять пропустил «{tournament}»? 😤 Турнир не пройдёт сам, даже если ты очень талантливо игнорируешь сетку. Залетай и закрывай долг!"
+    await bot.send_message(chat_id,roast)
+    await update_reminder(chat_id,uid,now)
+  except Exception:log.exception("Tournament reminder scheduler failed")
+
 async def main():
  await init_db();log.info("FC Mate is running")
+ asyncio.create_task(tournament_reminder_loop())
  await dp.start_polling(bot,allowed_updates=dp.resolve_used_update_types())
 if __name__=="__main__":asyncio.run(main())

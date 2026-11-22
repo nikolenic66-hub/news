@@ -71,3 +71,8 @@ async def remove_missed(chat_id,user_id):
 async def update_reminder(chat_id,user_id,now):
  async with aiosqlite.connect(DB_PATH) as db:
   await db.execute("UPDATE tournament_missed SET last_reminder=? WHERE chat_id=? AND user_id=?",(now,chat_id,user_id));await db.commit()
+
+async def get_missed_chats():
+ async with aiosqlite.connect(DB_PATH) as db:
+  cur=await db.execute("SELECT DISTINCT chat_id FROM tournament_missed")
+  return [row[0] for row in await cur.fetchall()]
