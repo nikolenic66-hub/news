@@ -13,7 +13,7 @@ from .storage import (
     set_setting, user_count, clear_chat, get_enabled_group_chats,
     get_user_stats, get_top_users,
 )
-from .logic import is_fc_topic, is_direct_message, should_spontaneously_reply
+from .logic import is_fc_topic
 from .ai import reply, summarize, ProviderError
 from .monitor import monitor_loop, build_intel_context
 
