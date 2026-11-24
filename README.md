@@ -24,7 +24,6 @@ Build from this repository using Dockerfile. Set the environment variables below
 | GROQ_MODEL | Text model name; defaults to `openai/gpt-oss-120b` |
 | GROQ_VISION_MODEL | Vision model for image analysis; defaults to `qwen/qwen3.8-27b` |
 | ADMIN_IDS | Optional comma-separated Telegram user IDs, in addition to Telegram group admins |
-| BOT_NAME | Bot display name |
 | BOT_PERSONA | Default personality |
 | REPLY_PROBABILITY | Chance of unsolicited reply on relevant FC topic, default 0.08, capped at 0.50 |
 | MAX_HISTORY | Recent context size, 6–30 messages |
