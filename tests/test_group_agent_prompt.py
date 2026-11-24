@@ -14,6 +14,8 @@ class GroupAgentPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Цитаты, пересланные сообщения", SYSTEM_PROMPT)
         self.assertIn("иногда лучше [SKIP]", SYSTEM_PROMPT)
         self.assertIn("Не сохраняй пароли", SYSTEM_PROMPT)
+        self.assertIn("не попал в доступную историю", SYSTEM_PROMPT)
+        self.assertIn("не придумывай пропущенные реплики", SYSTEM_PROMPT)
 
     async def test_group_memory_summary_rejects_untrusted_instructions(self):
         messages = [
