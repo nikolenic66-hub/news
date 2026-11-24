@@ -187,7 +187,7 @@ async def check_promo_codes_once(client, send_alert):
                             "Дата публикации: " + (entry.get("published") or "не указана") + "\n"
                             "Публикация: " + entry["title"][:250] + "\n"
                             "Источник: " + entry["url"] + "\n"
-                            "Активировать: https://redeem.fcm.ea.com/\\n"
+                            "Активировать: https://redeem.fcm.ea.com/\n"
                             "Код найден в свежей публикации за последние 48 часов; действительность проверь на странице EA."
                         )
         except Exception:
@@ -308,9 +308,18 @@ async def build_intel_context(query, client=None):
             lines.append(f"- {code}; источник: {source}; впервые замечен: {first_seen}; {url}")
     if fresh_news:
         lines.append("СВЕЖИЕ ПУБЛИКАЦИИ:")
-        for kind, title, summary, url, source, published in fresh_news:
+        for kind, title, summary, url, source, published, fetched_at in fresh_news:
             detail = (summary or "").strip()
-            lines.append(f"- [{kind}] {title} ({source}; дата публикации: {published}). {detail[:500]} Ссылка: {url}")
+            source_label = (
+                "EA — источник из официальной ленты"
+                if kind == "official_news" and "ea" in (source or "").lower()
+                else "сообщество/вторичный источник"
+            )
+            lines.append(
+                f"- [{kind}; уровень: {source_label}] {title} "
+                f"(источник: {source}; опубликовано: {published}; получено ботом: {fetched_at} UTC). "
+                f"{detail[:500]} Ссылка: {url}"
+            )
     else:
         lines.append("СВЕЖИХ ПУБЛИКАЦИЙ НЕ НАЙДЕНО. Не называй старые сведения актуальными; честно скажи, что свежий факт сейчас подтвердить не удалось.")
     return "\n".join(lines)[:9000]
