@@ -13,7 +13,7 @@ from .storage import (
     set_setting, user_count, clear_chat, get_enabled_group_chats,
     get_user_stats, get_top_users, get_recent_intel,
 )
-from .logic import is_fc_topic
+from .logic import is_fc_topic, is_bot_name_call
 from .ai import reply, summarize, ProviderError
 from .monitor import monitor_loop, build_intel_context, format_news_digest, format_sources_status
 from .renderz import player_context, is_player_data_question
@@ -264,7 +264,7 @@ async def handle_message(message):
     settings = await get_settings(chat_id)
     if not settings["enabled"]:
         return
-    direct = is_private or message_mentions_bot(message, text_in) or message_is_reply_to_bot(message)
+    direct = is_private or message_mentions_bot(message, text_in) or message_is_reply_to_bot(message) or is_bot_name_call(text_in)
     now = time.time()
     if direct and not is_private:
         if now - last_direct.get(chat_id, 0) < 12:
