@@ -1,19 +1,23 @@
 import httpx
-from .config import APINEX_API_KEY, APINEX_API_URL, APINEX_MODEL
+
+from .config import GROQ_API_KEY, GROQ_API_URL, GROQ_MODEL
 from .persona import SYSTEM_PROMPT
+
 
 class ProviderError(RuntimeError):
     pass
 
+
 async def _completion(messages, temperature=0.8, max_tokens=450):
-    if not APINEX_API_KEY:
-        raise ProviderError("APINEX_API_KEY не настроен")
-    if not APINEX_API_URL:
-        raise ProviderError("APINEX_API_URL не настроен")
-    if not APINEX_MODEL:
-        raise ProviderError("APINEX_MODEL не настроен")
+    if not GROQ_API_KEY:
+        raise ProviderError("GROQ_API_KEY не настроен в Amvera")
+    if not GROQ_API_URL:
+        raise ProviderError("GROQ_API_URL не настроен")
+    if not GROQ_MODEL:
+        raise ProviderError("GROQ_MODEL не настроен")
+
     payload = {
-        "model": APINEX_MODEL,
+        "model": GROQ_MODEL,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
@@ -21,9 +25,9 @@ async def _completion(messages, temperature=0.8, max_tokens=450):
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(40, connect=10)) as client:
             response = await client.post(
-                APINEX_API_URL,
+                GROQ_API_URL,
                 headers={
-                    "Authorization": f"Bearer {APINEX_API_KEY}",
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
                     "Content-Type": "application/json",
                 },
                 json=payload,
@@ -31,17 +35,19 @@ async def _completion(messages, temperature=0.8, max_tokens=450):
             if response.is_error:
                 detail = (response.text or "").strip().replace("\\n", " ")[:1200]
                 raise ProviderError(
-                    f"Apinex HTTP {response.status_code}: {detail or response.reason_phrase}"
+                    f"Groq HTTP {response.status_code}: {detail or response.reason_phrase}"
                 )
             data = response.json()
+
         answer = data["choices"][0]["message"]["content"]
         if not isinstance(answer, str) or not answer.strip():
-            raise ProviderError("Пустой ответ модели")
+            raise ProviderError("Groq вернул пустой или неподдерживаемый ответ")
         return answer.strip()
     except ProviderError:
         raise
     except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError) as exc:
-        raise ProviderError(f"Провайдер не ответил корректно: {exc}") from exc
+        raise ProviderError(f"Groq не ответил корректно: {exc}") from exc
+
 
 async def reply(messages, persona):
     system = SYSTEM_PROMPT.format(persona=persona or "стандартный FC Mate")
@@ -53,6 +59,7 @@ async def reply(messages, persona):
     if answer.strip().upper() == "[SKIP]":
         return ""
     return answer[:4000]
+
 
 async def summarize(memory, messages):
     if not messages:
