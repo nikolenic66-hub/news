@@ -7,7 +7,7 @@ import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from html.parser import HTMLParser
-from urllib.parse import quote_plus
+from urllib.parse import parse_qs, quote_plus, urlparse
 
 from .storage import (
     get_recent_intel,
@@ -167,9 +167,47 @@ def _codes_from_recent_article(entry):
 
 
 async def _get_text(client, url):
-    response = await client.get(url, headers=REQUEST_HEADERS, follow_redirects=True)
-    response.raise_for_status()
-    return response.text
+    """Fetch RSS with bounded retries; use Bing RSS if Google News remains unavailable."""
+    last_error = None
+    for attempt, delay in enumerate((0.0, 0.8, 2.0)):
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            response = await client.get(url, headers=REQUEST_HEADERS, follow_redirects=True)
+            if response.status_code in (429, 500, 502, 503, 504) and attempt < 2:
+                last_error = httpx.HTTPStatusError(
+                    f"Retryable feed HTTP {response.status_code}",
+                    request=response.request,
+                    response=response,
+                )
+                log.warning("RSS temporary HTTP %s (retry %s/2)", response.status_code, attempt + 1)
+                continue
+            response.raise_for_status()
+            return response.text
+        except httpx.HTTPError as exc:
+            last_error = exc
+            if attempt < 2:
+                log.warning("RSS request failed (retry %s/2): %s", attempt + 1, exc)
+                continue
+
+    # Google News outages are independent from the bot: try an RSS endpoint from
+    # Bing as a fallback, without requiring keys or paid API access.
+    parsed = urlparse(url)
+    if parsed.hostname and parsed.hostname.endswith("news.google.com"):
+        query = parse_qs(parsed.query).get("q", ["FC Mobile"])[0]
+        query = re.sub(r"\\bwhen:\\d+d\\b", "", query, flags=re.IGNORECASE).strip()
+        fallback_url = "https://www.bing.com/news/search?q=" + quote_plus(query or "FC Mobile") + "&format=rss"
+        try:
+            response = await client.get(fallback_url, headers=REQUEST_HEADERS, follow_redirects=True)
+            response.raise_for_status()
+            log.warning("Google News RSS unavailable; Bing RSS fallback succeeded")
+            return response.text
+        except httpx.HTTPError as fallback_error:
+            log.warning("Bing RSS fallback failed: %s", fallback_error)
+            last_error = fallback_error
+    if last_error:
+        raise last_error
+    raise RuntimeError("RSS feed fetch failed without a response")
 
 
 async def check_promo_codes_once(client, send_alert):
