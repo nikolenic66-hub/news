@@ -176,6 +176,12 @@ async def monitor_once(client, send_alert):
         try:
             feed = await _get_text(client, url)
             for entry in parse_rss(feed):
+                published_dt = _parse_date(entry["published"])
+                if not published_dt:
+                    continue
+                age_seconds = (datetime.now(timezone.utc) - published_dt).total_seconds()
+                if age_seconds > 14 * 24 * 3600 or age_seconds < -6 * 3600:
+                    continue
                 await save_intel_item(
                     kind,
                     entry["url"],
