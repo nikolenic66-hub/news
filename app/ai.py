@@ -73,7 +73,7 @@ async def reply(messages, persona, image_data=None, image_mime='image/jpeg'):
             previous_text = latest.get("content", "")
             if isinstance(previous_text, str):
                 latest["content"] = [
-                    {"type": "text", "text": image_text + "\\nТекст сообщения игрока: " + previous_text},
+                    {"type": "text", "text": image_text + "\nТекст сообщения игрока: " + previous_text},
                     image_part,
                 ]
                 attached = True
