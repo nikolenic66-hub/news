@@ -108,9 +108,6 @@ def message_mentions_bot(message, text):
 
 async def handle_command(message, command, args):
     chat_id = message["chat"]["id"]
-    reply_message = message.get("reply_to_message") or {}
-    target = reply_message.get("from") or None
-
     group_admin_commands = {
         "on", "off", "activity", "persona", "memory", "forget", "clear",
         "poll",
@@ -188,7 +185,7 @@ async def handle_command(message, command, args):
         else:
             await clear_chat(chat_id)
             summary_counter[chat_id] = 0
-            answer = "История, память, участники и список прогульщиков очищены; настройки сохранены."
+            answer = "История, память, участники и статистика активности очищены; настройки сохранены."
         await send(chat_id, answer, message.get("message_id"))
 
 
