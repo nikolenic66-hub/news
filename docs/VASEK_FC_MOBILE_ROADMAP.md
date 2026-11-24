@@ -7,6 +7,13 @@
 ## Журнал реализации
 
 ### 2026-11-24
+### 2026-11-24 — RenderZ fallback behavior
+- **Player-card fallback:** when the primary RenderZ lookup returns an error or no parsed card, the bot now attempts a secondary Bing News RSS search for player/card-related publications and links.
+- **Conversation behavior:** the hard-coded RenderZ outage/no-match dead-end response was replaced with a system context that lets the AI respond naturally, use publication links as leads, and explain uncertainty briefly.
+- **Accuracy guard:** secondary search results are explicitly unverified publications. They may not be used to invent exact OVR, stats, ranks, market price, or card program. Exact figures still require a parsed RenderZ card.
+- **Tests:** added coverage for secondary search links and the verified-card marker boundary. GitHub Actions compileall + unittest passed for commit `315fa5d2544b7229cfc4027124a64edf07bae4fe`.
+- **Deployment status:** CI passed; actual Amvera rollout and Telegram behavior remain to be confirmed from deployment/application logs.
+
 
 - **Этап 0 — базовая надёжность: выполнен в коде, CI зелёный.** Контекст intel теперь передаёт модели отдельно дату публикации и время получения записи ботом; добавлена маркировка официального EA-поиска и вторичных источников; сохранены фильтры свежести; исправлен перенос строки в уведомлении промокода.
 - **Этап 1 — новости и источники: начат.** Добавлены Telegram-команды `/news` и `/sources`. Они показывают только публикации с датой не старше 7 дней, ссылки, источник и время получения. RSS не выдаётся за базу карточек или доказательство активности события.
