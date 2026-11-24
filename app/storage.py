@@ -2,7 +2,10 @@ import aiosqlite
 from .config import DB_PATH,MAX_HISTORY
 
 async def init_db():
- async with aiosqlite.connect(DB_PATH) as db:
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  await db.execute("PRAGMA busy_timeout=30000")
+  if DB_PATH != ":memory:":
+   await db.execute("PRAGMA journal_mode=WAL")
   await db.executescript("""
   CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id INTEGER NOT NULL,user_id INTEGER,username TEXT,display_name TEXT,role TEXT NOT NULL,content TEXT NOT NULL,created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
   CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id,id);
@@ -15,7 +18,8 @@ async def init_db():
   if columns and not any(row[1]=="activity" for row in columns):await db.execute("ALTER TABLE settings ADD COLUMN activity REAL DEFAULT NULL")
   await db.commit()
 async def add_message(chat_id,user_id,username,display_name,role,content):
- async with aiosqlite.connect(DB_PATH) as db:
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  await db.execute("PRAGMA busy_timeout=30000")
   await db.execute("INSERT INTO messages(chat_id,user_id,username,display_name,role,content) VALUES(?,?,?,?,?,?)",(chat_id,user_id,username,display_name,role,(content or "")[:4000]))
   await db.execute("DELETE FROM messages WHERE chat_id=? AND id NOT IN (SELECT id FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT ?)",(chat_id,chat_id,MAX_HISTORY*3))
   if user_id is not None:
