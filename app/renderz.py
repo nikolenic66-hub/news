@@ -81,6 +81,21 @@ def _search_tokens(value: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", _normalise_search_text(value))
 
 
+_CYRILLIC_TO_LATIN = str.maketrans({
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e",
+    "ё": "e", "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k",
+    "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
+    "с": "s", "т": "t", "у": "u", "ф": "f", "х": "kh", "ц": "ts",
+    "ч": "ch", "ш": "sh", "щ": "shch", "ъ": "", "ы": "y", "ь": "",
+    "э": "e", "ю": "yu", "я": "ya",
+})
+
+
+def _transliterate_name_token(token: str) -> str:
+    """Fallback transliteration for Russian player names not in the alias list."""
+    return token.translate(_CYRILLIC_TO_LATIN) if re.search(r"[а-яё]", token, re.I) else token
+
+
 def _player_links(source: str, query: str) -> list[dict]:
     parser = _parse_html(source)
     requested_ovr_match = re.search(r"\b(\d{2,3})\b", query)
@@ -283,7 +298,10 @@ async def player_context(message: str, client) -> str:
         "кака": "Kaka", "лам": "Lahm", "рибери": "Ribery",
     }
     query_parts = query.split()
-    search_parts = [aliases.get(part.casefold(), part) for part in query_parts]
+    search_parts = [
+        aliases.get(part.casefold(), _transliterate_name_token(part))
+        for part in query_parts
+    ]
     search_query = " ".join(search_parts)
     cache_key = query.casefold()
     async with _cache_lock:
