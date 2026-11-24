@@ -87,6 +87,9 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(monitor._is_disallowed_source({
             "source": "FC Index", "source_url": "https://fcindex.app/players"
         }))
+        self.assertTrue(monitor._is_disallowed_source({
+            "source": "Regista XI", "source_url": "https://registaxi.abdulwasaylodhi.com/players"
+        }))
         self.assertFalse(monitor._is_disallowed_source({
             "source": "EA Sports", "source_url": "https://www.ea.com/news"
         }))
