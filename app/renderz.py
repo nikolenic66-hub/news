@@ -127,9 +127,21 @@ def _detail_fields(source: str) -> dict:
         match = re.search(pattern, text, re.I)
         if match:
             result[label] = match.group(1).strip()
-    playstyles = re.findall(r"([A-Z][A-Za-z ]{2,24})\s+Level\s+[1-3]", text)
+    playstyle_names = (
+        "Relentless", "Anticipate", "First Touch", "Power Header", "Long Throw",
+        "Trivela", "Finesse Shot", "Flair", "Aerial", "Quick Step", "Technical",
+        "Press Proven", "Intercept", "Jockey", "Block", "Bruiser", "Tiki Taka",
+        "Pinged Pass", "Whipped Pass", "Incisive Pass", "Long Ball Pass", "Dead Ball",
+        "Chip Shot", "Power Shot", "Acrobatic", "Slide Tackle", "Enforcer",
+        "Precision Header", "Rapid", "Trickster", "Low Driven Shot",
+        "Long Shot Taker", "Acrobatic Clearance", "Roulette",
+    )
+    playstyles = [
+        name for name in playstyle_names
+        if re.search(r"\b" + re.escape(name) + r"\s+Level\s+[1-3]", text, re.I)
+    ]
     if playstyles:
-        result["playstyles"] = list(dict.fromkeys(p.strip() for p in playstyles))[:8]
+        result["playstyles"] = playstyles[:8]
     return result
 
 
