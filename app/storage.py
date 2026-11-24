@@ -13,6 +13,9 @@ async def init_db():
   CREATE TABLE IF NOT EXISTS settings(chat_id INTEGER PRIMARY KEY,enabled INTEGER NOT NULL DEFAULT 1,activity REAL DEFAULT NULL,persona TEXT NOT NULL DEFAULT '');
   CREATE TABLE IF NOT EXISTS users(chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,display_name TEXT,username TEXT,last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(chat_id,user_id));
   CREATE TABLE IF NOT EXISTS tournament_missed(chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,username TEXT,display_name TEXT,tournament TEXT NOT NULL,last_reminder REAL NOT NULL DEFAULT 0,PRIMARY KEY(chat_id,user_id));
+  CREATE TABLE IF NOT EXISTS intel_items(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,item_key TEXT NOT NULL UNIQUE,title TEXT NOT NULL,summary TEXT NOT NULL DEFAULT '',url TEXT NOT NULL,source TEXT NOT NULL,published_at TEXT NOT NULL DEFAULT '',fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
+  CREATE INDEX IF NOT EXISTS idx_intel_fetched_at ON intel_items(fetched_at);
+  CREATE TABLE IF NOT EXISTS promo_codes(code TEXT PRIMARY KEY,reward TEXT NOT NULL DEFAULT '',source TEXT NOT NULL,source_url TEXT NOT NULL,first_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
   """)
   columns=await (await db.execute("PRAGMA table_info(settings)")).fetchall()
   if columns and not any(row[1]=="activity" for row in columns):await db.execute("ALTER TABLE settings ADD COLUMN activity REAL DEFAULT NULL")
@@ -79,4 +82,39 @@ async def update_reminder(chat_id,user_id,now):
 async def get_missed_chats():
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
   cur=await db.execute("SELECT DISTINCT chat_id FROM tournament_missed")
+  return [row[0] for row in await cur.fetchall()]
+
+
+async def save_intel_item(kind,item_key,title,summary,url,source,published_at=''):
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  await db.execute('PRAGMA busy_timeout=30000')
+  cur=await db.execute('INSERT OR IGNORE INTO intel_items(kind,item_key,title,summary,url,source,published_at) VALUES(?,?,?,?,?,?,?)',(kind,item_key,title[:500],(summary or '')[:3000],url,source,published_at or ''))
+  await db.commit()
+  return cur.rowcount == 1
+
+async def save_promo_code(code,source,source_url,reward=''):
+ code=(code or '').strip().upper()
+ if not code:return False
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  await db.execute('PRAGMA busy_timeout=30000')
+  cur=await db.execute('INSERT OR IGNORE INTO promo_codes(code,reward,source,source_url) VALUES(?,?,?,?)',(code,(reward or '')[:300],source[:100],source_url[:1000]))
+  inserted=cur.rowcount == 1
+  if not inserted:
+   await db.execute('UPDATE promo_codes SET last_seen=CURRENT_TIMESTAMP WHERE code=?',(code,))
+  await db.commit()
+  return inserted
+
+async def get_recent_intel(limit=8):
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  cur=await db.execute(\"SELECT kind,title,summary,url,source,published_at FROM intel_items WHERE fetched_at >= datetime('now','-14 days') ORDER BY fetched_at DESC LIMIT ?\",(max(1,min(20,int(limit))),))
+  return await cur.fetchall()
+
+async def get_recent_promo_codes(limit=8):
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  cur=await db.execute(\"SELECT code,reward,source,source_url,first_seen FROM promo_codes WHERE first_seen >= datetime('now','-30 days') ORDER BY first_seen DESC LIMIT ?\",(max(1,min(20,int(limit))),))
+  return await cur.fetchall()
+
+async def get_enabled_group_chats():
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  cur=await db.execute('SELECT DISTINCT m.chat_id FROM messages m LEFT JOIN settings s ON s.chat_id=m.chat_id WHERE m.chat_id < 0 AND COALESCE(s.enabled,1)=1')
   return [row[0] for row in await cur.fetchall()]
