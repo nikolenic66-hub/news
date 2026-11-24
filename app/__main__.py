@@ -1,14 +1,23 @@
-import asyncio,random,time,logging
+import asyncio,random,time,logging,sys
+logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(name)s: %(message)s',stream=sys.stdout,force=True)
+log=logging.getLogger('fc-mate-startup')
+log.info('Python entrypoint reached; imports are starting')
 from aiogram import Bot,Dispatcher,F
 from aiogram.filters import Command,CommandStart
 from aiogram.types import Message
 from aiogram.enums import ChatType
-from .config import BOT_TOKEN,BOT_NAME,PERSONA,ADMIN_IDS,REPLY_PROBABILITY
+from .config import BOT_TOKEN,AI_KEY,BOT_NAME,PERSONA,ADMIN_IDS,REPLY_PROBABILITY
 from .storage import init_db,add_message,history,get_memory,save_memory,get_settings,set_setting,user_count,clear_chat,mark_missed,get_missed,find_user,remove_missed,update_reminder,get_missed_chats
 from .logic import is_fc_topic,is_direct_message,should_spontaneously_reply
 from .ai import reply,summarize,ProviderError
-logging.basicConfig(level=logging.INFO);log=logging.getLogger("fc-mate")
-if not BOT_TOKEN:raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
+log=logging.getLogger("fc-mate")
+if not BOT_TOKEN:
+ log.critical("Startup configuration error: TELEGRAM_BOT_TOKEN is missing")
+ raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
+if not AI_KEY:
+ log.warning("AI key is missing: set AI_API_KEY or DEEPSEEK_API_KEY; AI replies will fail")
+if __import__("os").getenv("DATABASE_URL"):
+ log.warning("DATABASE_URL detected but this build uses SQLite; set DB_PATH to a persistent SQLite file if persistence is required")
 bot=Bot(BOT_TOKEN);dp=Dispatcher()
 last_spontaneous={};last_direct={};summary_counter={}
 TOURNAMENT_COOLDOWN=45*60
@@ -165,7 +174,21 @@ async def tournament_reminder_loop():
     log.exception("Tournament reminder failed for chat %s",chat_id)
 
 async def main():
- await init_db();log.info("FC Mate is running")
- asyncio.create_task(tournament_reminder_loop())
- await dp.start_polling(bot,allowed_updates=dp.resolve_used_update_types())
-if __name__=="__main__":asyncio.run(main())
+ log.info("Starting application initialization")
+ try:
+  await init_db()
+  log.info("SQLite initialization succeeded")
+  log.info("Checking Telegram token/API connectivity")
+  me=await bot.get_me()
+  log.info("Telegram API connection succeeded; bot=%s (id=%s)",me.username,me.id)
+  log.info("Starting polling")
+  asyncio.create_task(tournament_reminder_loop())
+  await dp.start_polling(bot,allowed_updates=dp.resolve_used_update_types())
+ except Exception:
+  log.exception("Startup or polling failed")
+  raise
+if __name__=="__main__":
+ try: asyncio.run(main())
+ except Exception:
+  log.exception("Process exited with fatal error")
+  raise
