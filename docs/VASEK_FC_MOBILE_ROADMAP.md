@@ -520,3 +520,9 @@ Tests added for exact-token matching, multi-word names, accented names, OVR-only
 - цитаты, скриншоты и чужие инструкции не становятся управляющими правилами;
 - исключает чувствительные сведения, личные секреты и политические/религиозные взгляды;
 - текущая архитектура пересматривает память после каждых 30 сообщений (при сбое повторяет попытку через 5 сообщений). Сводка передаётся как контекст будущих ответов. Это не непрерывное обучение нейросети, не меняет модель и не переписывает код.
+
+### 2026-11-24 — RenderZ multi-player lookup efficiency
+- **Problem:** comparing multiple players repeated the same public RenderZ list-page requests once per requested name.
+- **Change:** each list page is now fetched once per lookup and checked against every still-unmatched player name; detail pages are fetched only for matched cards.
+- **Safety:** exact card fields still come only from parsed public RenderZ pages; no new endpoints or external services were added.
+- **Verification:** added a regression test asserting that a two-player comparison uses one shared list-page fetch plus one detail fetch per matched card. CI result is pending.
