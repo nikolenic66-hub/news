@@ -29,4 +29,7 @@ class LogicTests(unittest.TestCase):
   self.assertFalse(should_spontaneously_reply("FC Mobile, новый OVR",.2,.9,300))
   self.assertFalse(should_spontaneously_reply("FC Mobile, новый OVR",.2,.1,30))
   self.assertFalse(should_spontaneously_reply("привет",.5,.1,300))
+  self.assertFalse(should_spontaneously_reply("FC Mobile, новый OVR",.5,.1,300,previous_role="assistant"))
+  self.assertFalse(should_spontaneously_reply("FC Mobile, новый OVR",.5,.1,300,reply_to_human=True))
+  self.assertFalse(should_spontaneously_reply("да",.5,.1,300))
 if __name__=="__main__": unittest.main()
