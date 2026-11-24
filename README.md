@@ -11,7 +11,7 @@ Russian-speaking AI group participant. It discusses FC Mobile, cards/OVR, lineup
 ## Groq API
 Create an API key in the [Groq Console](https://console.groq.com/keys). The default model is `openai/gpt-oss-120b`; the bot uses Groq's OpenAI-compatible Chat Completions endpoint.
 
-The Groq Free Plan has per-model limits, including request and token-per-day limits. Check the current values for your organization in the Groq Console; free quotas can change.
+The Groq Free Plan has per-model limits, including request and token-per-day limits. Check the current values for your organization in the Groq Console; free quotas can change. Image understanding uses the separate `GROQ_VISION_MODEL` (default `qwen/qwen3.8-27b`), so vision requests consume that model's quota and may have different pricing/limits.
 
 ## Deploy on Amvera
 Build from this repository using Dockerfile. Set the environment variables below. Use persistent storage for the database path (e.g. mount storage and set `DB_PATH` to a file under that mount).
@@ -21,7 +21,8 @@ Build from this repository using Dockerfile. Set the environment variables below
 | TELEGRAM_BOT_TOKEN | Required Telegram bot token |
 | GROQ_API_KEY | Required Groq API key |
 | GROQ_API_URL | Groq Chat Completions URL; defaults to `https://api.groq.com/openai/v1/chat/completions` |
-| GROQ_MODEL | Model name; defaults to `openai/gpt-oss-120b` |
+| GROQ_MODEL | Text model name; defaults to `openai/gpt-oss-120b` |
+| GROQ_VISION_MODEL | Vision model for image analysis; defaults to `qwen/qwen3.8-27b` |
 | ADMIN_IDS | Optional comma-separated Telegram user IDs, in addition to Telegram group admins |
 | BOT_NAME | Bot display name |
 | BOT_PERSONA | Default personality |
@@ -34,7 +35,7 @@ Build from this repository using Dockerfile. Set the environment variables below
 - Admins: `/on`, `/off`, `/activity 0-50`, `/persona your style`, `/memory`, `/forget`, `/clear`
 - Mention bot or reply to its message for a direct answer.
 
-## Memory and privacy
+## FC Mate features\n\n- Telegram photo and image-document analysis through Groq Vision. Reply to a photo or mention the bot in its caption to request analysis; in groups, unaddressed images follow the configured low-noise activity chance. Images larger than 20 MB are rejected.\n- `/stats` and `/top` show message activity for the current chat.\n- `/tournament title`, `/join`, `/participants`, `/finish` provide simple registration management; only group admins can open/close registration.\n- `/poll question | option 1 | option 2` creates a Telegram poll; only group admins can create polls.\n\n## Memory and privacy
 Stores recent group messages for context, usernames, a short group memory and settings. Long-term summaries are limited to game-related preferences, recurring jokes and group context; sensitive information is excluded by prompt. `/forget` removes long-term summary, `/clear` removes stored messages, summary and participant list. SQLite data persists only if Amvera storage is configured to persist the DB file. Do not put API secrets into GitHub.
 
 
