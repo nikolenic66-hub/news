@@ -16,6 +16,8 @@ async def init_db():
   CREATE TABLE IF NOT EXISTS intel_items(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,item_key TEXT NOT NULL UNIQUE,title TEXT NOT NULL,summary TEXT NOT NULL DEFAULT '',url TEXT NOT NULL,source TEXT NOT NULL,published_at TEXT NOT NULL DEFAULT '',fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
   CREATE INDEX IF NOT EXISTS idx_intel_fetched_at ON intel_items(fetched_at);
   CREATE TABLE IF NOT EXISTS promo_codes(code TEXT PRIMARY KEY,reward TEXT NOT NULL DEFAULT '',source TEXT NOT NULL,source_url TEXT NOT NULL,first_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
+  CREATE TABLE IF NOT EXISTS tournaments(id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id INTEGER NOT NULL,title TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+  CREATE TABLE IF NOT EXISTS tournament_entries(tournament_id INTEGER NOT NULL,user_id INTEGER NOT NULL,display_name TEXT NOT NULL,username TEXT,joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(tournament_id,user_id));
   """)
   columns=await (await db.execute("PRAGMA table_info(settings)")).fetchall()
   if columns and not any(row[1]=="activity" for row in columns):await db.execute("ALTER TABLE settings ADD COLUMN activity REAL DEFAULT NULL")
