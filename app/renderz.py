@@ -83,6 +83,8 @@ def _player_links(source: str, query: str) -> list[dict]:
         match = re.search(r"\b(\d{2,3})\s+(GK|CB|LB|RB|LWB|RWB|CDM|CM|CAM|LM|RM|LW|RW|CF|ST)\b", label, re.I)
         if not match:
             continue
+        if requested_ovr is not None and int(match.group(1)) != requested_ovr:
+            continue
         item = {
             "url": full,
             "label": label,
@@ -199,6 +201,15 @@ async def player_context(message: str, client) -> str:
     query = _extract_search_query(message)
     if len(query) < 2:
         return ""
+    aliases = {
+        "месси": "Messi", "роналду": "Ronaldo", "роналдо": "Ronaldo",
+        "холанд": "Haaland", "холанда": "Haaland", "мбаппе": "Mbappe",
+        "беллингем": "Bellingham", "винисиус": "Vinicius",
+        "салах": "Salah", "кейна": "Kane", "кейну": "Kane",
+    }
+    query_parts = query.split()
+    search_parts = [aliases.get(part.casefold(), part) for part in query_parts]
+    search_query = " ".join(search_parts)
     cache_key = query.casefold()
     async with _cache_lock:
         cached = _cache.get(cache_key)
@@ -211,10 +222,10 @@ async def player_context(message: str, client) -> str:
     errors = []
     cards = []
     for parameter in ("search", "q"):
-        url = f"{PLAYERS_URL}?{parameter}={quote_plus(query)}"
+        url = f"{PLAYERS_URL}?{parameter}={quote_plus(search_query)}"
         try:
             page = await _get_page(client, url)
-            cards = _player_links(page, query)
+            cards = _player_links(page, search_query)
             if cards:
                 break
         except Exception as exc:
