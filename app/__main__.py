@@ -110,9 +110,9 @@ async def handle_command(message, command, args):
         return
 
     if command == "start":
-        await send(chat_id, f"Я {BOT_NAME} — ИИ-игрок в чате FC Mobile. Обсуждаю карточки, составы и тактики, могу пошутить и иногда сам вклиниться в тему.\\n/help", message.get("message_id"))
+        await send(chat_id, f"Я {BOT_NAME} — ИИ-игрок в чате FC Mobile. Обсуждаю карточки, составы и тактики, могу пошутить и иногда сам вклиниться в тему.\n/help", message.get("message_id"))
     elif command == "help":
-        await send(chat_id, "/status — настройки чата\\n/on, /off — включить или выключить меня (админы)\\n/activity 0-50 — шанс моей инициативы (админы)\\n/persona текст — мой характер (админы)\\n/memory — долговременная память (админы)\\n/forget — очистить только память (админы)\\n/clear — очистить историю и память (админы)\\n/missed — отметить прогульщика ответом\\n/missed @username турнир — добавить в список\\n/missedlist — список прогульщиков\\n/played — снять с списка ответом или @username\\n\\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
+        await send(chat_id, "/status — настройки чата\n/on, /off — включить или выключить меня (админы)\n/activity 0-50 — шанс моей инициативы (админы)\n/persona текст — мой характер (админы)\n/memory — долговременная память (админы)\n/forget — очистить только память (админы)\n/clear — очистить историю и память (админы)\n/missed — отметить прогульщика ответом\n/missed @username турнир — добавить в список\n/missedlist — список прогульщиков\n/played — снять с списка ответом или @username\n\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
     elif command == "missed":
         if not await is_admin(message):
             await send(chat_id, "Турнирный список меняют администраторы.", message.get("message_id")); return
@@ -132,7 +132,7 @@ async def handle_command(message, command, args):
         if not await is_admin(message):
             await send(chat_id, "Только администраторы.", message.get("message_id")); return
         rows = await get_missed(chat_id)
-        await send(chat_id, "Список прогульщиков:\\n" + "\\n".join(f"• {name} — «{tour}»" for _, _, name, tour, _ in rows) if rows else "Список прогульщиков пуст.", message.get("message_id"))
+        await send(chat_id, "Список прогульщиков:\n" + "\n".join(f"• {name} — «{tour}»" for _, _, name, tour, _ in rows) if rows else "Список прогульщиков пуст.", message.get("message_id"))
     elif command == "played":
         if not await is_admin(message):
             await send(chat_id, "Только администраторы.", message.get("message_id")); return
@@ -147,7 +147,7 @@ async def handle_command(message, command, args):
     elif command == "status":
         settings = await get_settings(chat_id)
         chance = REPLY_PROBABILITY if settings["activity"] is None else settings["activity"]
-        await send(chat_id, f"FC Mate: {'активен' if settings['enabled'] else 'выключен'}\\nИнициатива: {chance*100:.0f}%\\nЗапомненных участников: {await user_count(chat_id)}\\nПрогульщиков турнира: {len(await get_missed(chat_id))}", message.get("message_id"))
+        await send(chat_id, f"FC Mate: {'активен' if settings['enabled'] else 'выключен'}\nИнициатива: {chance*100:.0f}%\nЗапомненных участников: {await user_count(chat_id)}\nПрогульщиков турнира: {len(await get_missed(chat_id))}", message.get("message_id"))
     elif command in ("on", "off"):
         if not await is_admin(message):
             await send(chat_id, "Только администраторы группы.", message.get("message_id")); return
@@ -170,7 +170,7 @@ async def handle_command(message, command, args):
     elif command == "persona":
         settings = await get_settings(chat_id)
         if not args:
-            await send(chat_id, "Текущий характер:\\n" + (settings["persona"] or PERSONA), message.get("message_id")); return
+            await send(chat_id, "Текущий характер:\n" + (settings["persona"] or PERSONA), message.get("message_id")); return
         if not await is_admin(message):
             await send(chat_id, "Настройку меняют администраторы.", message.get("message_id")); return
         await set_setting(chat_id, "persona", args)
