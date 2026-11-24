@@ -1,6 +1,6 @@
 import httpx
 
-from .config import GROQ_API_KEY, GROQ_API_URL, GROQ_MODEL
+from .config import GROQ_API_KEY, GROQ_API_URL, GROQ_MODEL, GROQ_VISION_MODEL
 from .persona import SYSTEM_PROMPT
 
 
@@ -8,7 +8,7 @@ class ProviderError(RuntimeError):
     pass
 
 
-async def _completion(messages, temperature=0.8, max_tokens=450):
+async def _completion(messages, temperature=0.8, max_tokens=450, model=None):
     if not GROQ_API_KEY:
         raise ProviderError("GROQ_API_KEY не настроен в Amvera")
     if not GROQ_API_URL:
@@ -17,7 +17,7 @@ async def _completion(messages, temperature=0.8, max_tokens=450):
         raise ProviderError("GROQ_MODEL не настроен")
 
     payload = {
-        "model": GROQ_MODEL,
+        "model": model or GROQ_MODEL,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
@@ -49,12 +49,24 @@ async def _completion(messages, temperature=0.8, max_tokens=450):
         raise ProviderError(f"Groq не ответил корректно: {exc}") from exc
 
 
-async def reply(messages, persona):
+async def reply(messages, persona, image_data=None, image_mime='image/jpeg'):
     system = SYSTEM_PROMPT.format(persona=persona or "стандартный FC Mate")
+    request_messages = [{"role": "system", "content": system}, *messages]
+    model = GROQ_MODEL
+    if image_data:
+        request_messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Внимательно рассмотри изображение. Если это FC Mobile — распознай видимые данные, карточки, OVR, позиции, состав, счёт, задания или событие. Не выдумывай нечитаемые значения; прямо отмечай сомнительные места. Ответь на подпись/вопрос пользователя."},
+                {"type": "image_url", "image_url": {"url": "data:" + image_mime + ";base64," + image_data}},
+            ],
+        })
+        model = GROQ_VISION_MODEL
     answer = await _completion(
-        [{"role": "system", "content": system}, *messages],
-        temperature=0.85,
-        max_tokens=500,
+        request_messages,
+        temperature=0.35 if image_data else 0.85,
+        max_tokens=900 if image_data else 500,
+        model=model,
     )
     if answer.strip().upper() == "[SKIP]":
         return ""
