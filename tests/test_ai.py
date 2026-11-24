@@ -1,5 +1,8 @@
+import os
 import unittest
 from unittest.mock import AsyncMock, patch
+
+os.environ.setdefault("DB_PATH", ":memory:")
 
 from app import ai
 
