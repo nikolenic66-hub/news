@@ -1,0 +1,253 @@
+"""Read player-card data from RenderZ's public, unauthenticated web pages.
+
+This deliberately uses ordinary page URLs and server-rendered HTML. It does not
+call undocumented/private endpoints, impersonate the mobile app, or bypass access
+controls. Keep requests low-volume and cache results.
+"""
+from __future__ import annotations
+
+import asyncio
+import re
+import time
+from html.parser import HTMLParser
+from urllib.parse import quote_plus, urljoin
+
+BASE_URL = "https://renderz.app"
+PLAYERS_URL = BASE_URL + "/players"
+CACHE_TTL = 600
+REQUEST_TIMEOUT = 18
+MAX_RESULTS = 4
+
+_cache: dict[str, tuple[float, str]] = {}
+_cache_lock = asyncio.Lock()
+
+
+class _PageText(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.text: list[str] = []
+        self.links: list[tuple[str, str]] = []
+        self._anchor_depth = 0
+        self._anchor_href = ""
+        self._anchor_text: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() == "a":
+            attrs = dict(attrs)
+            self._anchor_depth += 1
+            if self._anchor_depth == 1:
+                self._anchor_href = attrs.get("href", "")
+                self._anchor_text = []
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "a" and self._anchor_depth:
+            self._anchor_depth -= 1
+            if self._anchor_depth == 0:
+                label = " ".join(" ".join(self._anchor_text).split())
+                if self._anchor_href and label:
+                    self.links.append((self._anchor_href, label))
+                self._anchor_href = ""
+                self._anchor_text = []
+
+    def handle_data(self, data):
+        value = " ".join((data or "").split())
+        if not value:
+            return
+        self.text.append(value)
+        if self._anchor_depth:
+            self._anchor_text.append(value)
+
+
+def _parse_html(source: str) -> _PageText:
+    parser = _PageText()
+    parser.feed(source or "")
+    parser.close()
+    return parser
+
+
+def _player_links(source: str, query: str) -> list[dict]:
+    parser = _parse_html(source)
+    query_words = [w.casefold() for w in re.findall(r"[\w'-]+", query) if len(w) > 1]
+    found = []
+    seen = set()
+    for href, label in parser.links:
+        if not re.match(r"^/player/[A-Za-z0-9_-]+", href):
+            continue
+        full = urljoin(BASE_URL, href)
+        if full in seen:
+            continue
+        # RenderZ's public player list exposes OVR and grouped stats in the
+        # anchor's visible text. Do not invent fields missing from the page.
+        if query_words and not any(w in label.casefold() for w in query_words):
+            continue
+        match = re.search(r"\b(\d{2,3})\s+(GK|CB|LB|RB|LWB|RWB|CDM|CM|CAM|LM|RM|LW|RW|CF|ST)\b", label, re.I)
+        if not match:
+            continue
+        item = {
+            "url": full,
+            "label": label,
+            "ovr": int(match.group(1)),
+            "position": match.group(2).upper(),
+        }
+        for key, pattern in {
+            "PAC": r"(\d{1,3})\s+PAC",
+            "SHO": r"(\d{1,3})\s+SHO",
+            "PAS": r"(\d{1,3})\s+PAS",
+            "DRI": r"(\d{1,3})\s+DRI",
+            "DEF": r"(\d{1,3})\s+DEF",
+            "PHY": r"(\d{1,3})\s+PHY",
+        }.items():
+            value = re.search(pattern, label, re.I)
+            if value:
+                item[key] = int(value.group(1))
+        seen.add(full)
+        found.append(item)
+    return found[:MAX_RESULTS]
+
+
+def _detail_fields(source: str) -> dict:
+    parser = _parse_html(source)
+    text = " ".join(parser.text)
+    result = {}
+    heading = re.search(r"([^|]{2,90}?)\s*[—-]\s*(\d{2,3})\s*OVR", text, re.I)
+    if heading:
+        result["name"] = heading.group(1).strip()
+        result["ovr"] = int(heading.group(2))
+    for label, pattern in {
+        "nation": r"NATION/REGION\s+([A-Za-zÀ-ÿ .'-]+?)(?=\s+(?:Skill Moves|STRONG FOOT|Height|Weight|Work Rate|Added on))",
+        "height": r"Height\s+([^|]{1,30}?)(?=\s+Weight)",
+        "weight": r"Weight\s+(\d{1,3}\s*kg)",
+        "work_rate": r"Work Rate \(ATT\) / Work Rate \(DEF\)\s+([A-Za-z]+/[A-Za-z]+)",
+        "added_on": r"Added on\s+(\d{1,2}/\d{1,2}/\d{4})",
+    }.items():
+        match = re.search(pattern, text, re.I)
+        if match:
+            result[label] = match.group(1).strip()
+    playstyles = re.findall(r"([A-Z][A-Za-z ]{2,24})\s+Level\s+[1-3]", text)
+    if playstyles:
+        result["playstyles"] = list(dict.fromkeys(p.strip() for p in playstyles))[:8]
+    return result
+
+
+def _format_card(card: dict, detail: dict | None = None) -> str:
+    detail = detail or {}
+    name = detail.get("name") or card["label"].split()
+    if isinstance(name, list):
+        name = " ".join(name[2:]) if len(name) > 2 else " ".join(name)
+    lines = [
+        f"• {name} — {card['ovr']} OVR, позиция {card['position']}",
+        "  Характеристики: " + ", ".join(f"{k} {card[k]}" for k in ("PAC", "SHO", "PAS", "DRI", "DEF", "PHY") if k in card)
+        if any(k in card for k in ("PAC", "SHO", "PAS", "DRI", "DEF", "PHY")) else "  Групповые характеристики в списке не указаны.",
+    ]
+    if detail.get("nation"):
+        lines.append("  Страна: " + detail["nation"])
+    if detail.get("height"):
+        lines.append("  Рост: " + detail["height"])
+    if detail.get("weight"):
+        lines.append("  Вес: " + detail["weight"])
+    if detail.get("work_rate"):
+        lines.append("  Work rate: " + detail["work_rate"])
+    if detail.get("playstyles"):
+        lines.append("  PlayStyles: " + ", ".join(detail["playstyles"]))
+    if detail.get("added_on"):
+        lines.append("  Карточка добавлена: " + detail["added_on"])
+    lines.append("  Карточка: " + card["url"])
+    return "\n".join(lines)
+
+
+def _extract_search_query(message: str) -> str:
+    value = re.sub(r"@\w+", " ", message or "")
+    value = re.sub(
+        r"(?i)\b(найди|покажи|скажи|какой|какая|какое|сколько|сравни|карточка|карточку|карты|карта|игрок|игрока|овр|рейтинг|статы|характеристики|цена|стоит|сейчас|у|на|в|по|для|fc\s*mobile|fcm|фкм|фк\s*мобайл)\b",
+        " ", value,
+    )
+    value = re.sub(r"[^\w\s'-]", " ", value)
+    value = " ".join(value.split())
+    return value[:80]
+
+
+def is_player_data_question(message: str) -> bool:
+    text = (message or "").casefold()
+    intent = re.search(
+        r"(овр|\bovr\b|карточ|игрок|стат[ыи]|характеристик|ранг|прокач|трениров|цена|стоимост|сравни|лучше|месси|роналд|холанд|мбаппе|беллингем|винисиус)",
+        text,
+    )
+    return bool(intent)
+
+
+async def _get_page(client, url: str) -> str:
+    response = await client.get(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; VasekFCMobileBot/1.0)",
+            "Accept": "text/html,application/xhtml+xml",
+        },
+        follow_redirects=True,
+        timeout=REQUEST_TIMEOUT,
+    )
+    response.raise_for_status()
+    content_type = response.headers.get("content-type", "")
+    if "text/html" not in content_type and "application/xhtml+xml" not in content_type:
+        raise ValueError("RenderZ вернул не HTML-страницу")
+    return response.text
+
+
+async def player_context(message: str, client) -> str:
+    """Return source-grounded player data context, or an empty string."""
+    if not is_player_data_question(message):
+        return ""
+    query = _extract_search_query(message)
+    if len(query) < 2:
+        return ""
+    cache_key = query.casefold()
+    async with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and time.monotonic() - cached[0] < CACHE_TTL:
+            return cached[1]
+
+    # Use the public player-list page, not undocumented JSON/mobile endpoints.
+    # The search parameter is a normal page URL; results are accepted only when
+    # the returned visible card labels actually match the requested words.
+    errors = []
+    cards = []
+    for parameter in ("search", "q"):
+        url = f"{PLAYERS_URL}?{parameter}={quote_plus(query)}"
+        try:
+            page = await _get_page(client, url)
+            cards = _player_links(page, query)
+            if cards:
+                break
+        except Exception as exc:
+            errors.append(type(exc).__name__)
+
+    if not cards:
+        context = (
+            "ДАННЫЕ RENDERZ: по запросу «" + query + "» карточка не найдена в публичном списке. "
+            "Не выдумывай OVR, статы, ранг или цену. Уточни латинское написание имени либо версию карточки."
+        )
+        async with _cache_lock:
+            _cache[cache_key] = (time.monotonic(), context)
+        return context
+
+    blocks = []
+    # Fetch only the best matching page, keeping request volume low.
+    for card in cards[:2]:
+        detail = {}
+        try:
+            detail_page = await _get_page(client, card["url"])
+            detail = _detail_fields(detail_page)
+        except Exception:
+            pass
+        blocks.append(_format_card(card, detail))
+
+    context = (
+        "ПРОВЕРЕННЫЕ ДАННЫЕ КАРТОЧЕК RENDERZ (публичные страницы; время получения — "
+        + time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+        + "). Это данные конкретных версий карт, не общий OVR состава. "
+        "Используй только перечисленные поля; если запрошенное поле отсутствует, прямо скажи об этом. "
+        "Не достраивай ранг, тренировку или рыночную цену догадкой.\n"
+        + "\n".join(blocks)
+    )
+    async with _cache_lock:
+        _cache[cache_key] = (time.monotonic(), context)
+    return context
