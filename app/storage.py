@@ -106,12 +106,12 @@ async def save_promo_code(code,source,source_url,reward=''):
 
 async def get_recent_intel(limit=8):
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute(\"SELECT kind,title,summary,url,source,published_at FROM intel_items WHERE fetched_at >= datetime('now','-14 days') ORDER BY fetched_at DESC LIMIT ?\",(max(1,min(20,int(limit))),))
+  cur=await db.execute("SELECT kind,title,summary,url,source,published_at FROM intel_items WHERE fetched_at >= datetime('now','-14 days') ORDER BY fetched_at DESC LIMIT ?",(max(1,min(20,int(limit))),))
   return await cur.fetchall()
 
 async def get_recent_promo_codes(limit=8):
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute(\"SELECT code,reward,source,source_url,first_seen FROM promo_codes WHERE first_seen >= datetime('now','-30 days') ORDER BY first_seen DESC LIMIT ?\",(max(1,min(20,int(limit))),))
+  cur=await db.execute("SELECT code,reward,source,source_url,first_seen FROM promo_codes WHERE first_seen >= datetime('now','-30 days') ORDER BY first_seen DESC LIMIT ?",(max(1,min(20,int(limit))),))
   return await cur.fetchall()
 
 async def get_enabled_group_chats():
