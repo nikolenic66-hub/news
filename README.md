@@ -22,7 +22,7 @@ Build from this repository using Dockerfile. Set the environment variables below
 | BOT_PERSONA | Default personality |
 | REPLY_PROBABILITY | Chance of unsolicited reply on relevant FC topic, default 0.08, capped at 0.50 |
 | MAX_HISTORY | Recent context size, 6–30 messages |
-| DB_PATH | SQLite file path, default data/chatmate.sqlite3; DATABASE_URL is not used by this SQLite build |
+| DB_PATH | SQLite file path, default /data/chatmate.sqlite3 (Amvera persistent data mount); DATABASE_URL is not used by this SQLite build |
 
 ## Commands in group
 - `/help`, `/status`
