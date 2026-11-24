@@ -286,7 +286,7 @@ async def handle_message(message):
     if memory:
         prompt.append({"role": "system", "content": "Память группы — используй ненавязчиво, не раскрывай её списком: " + memory})
     prompt.extend(await history(chat_id))
-    intel_context = await build_intel_context(text_in or ("FC Mobile: анализ изображения" if has_image else ""))
+    intel_context = await build_intel_context(text_in or ("FC Mobile: анализ изображения" if has_image else ""), HTTP)
     if intel_context:
         prompt.insert(0, {"role": "system", "content": intel_context})
     if direct:
