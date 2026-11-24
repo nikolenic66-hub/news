@@ -16,6 +16,7 @@ from .storage import (
 from .logic import is_fc_topic
 from .ai import reply, summarize, ProviderError
 from .monitor import monitor_loop, build_intel_context, format_news_digest, format_sources_status
+from .renderz import player_context, is_player_data_question
 
 logging.basicConfig(
     level=logging.INFO,
@@ -296,6 +297,14 @@ async def handle_message(message):
     intel_context = await build_intel_context(text_in or ("FC Mobile: анализ изображения" if has_image else ""), HTTP)
     if intel_context:
         prompt.insert(0, {"role": "system", "content": intel_context})
+    if not has_image and is_player_data_question(text_in):
+        try:
+            card_context = await player_context(text_in, HTTP)
+            if card_context:
+                prompt.insert(0, {"role": "system", "content": card_context})
+        except Exception:
+            log.exception("RenderZ player lookup failed")
+            prompt.insert(0, {"role": "system", "content": "Поиск карточки в RenderZ сейчас недоступен. Не придумывай OVR, характеристики, ранг или цену; честно сообщи, что база временно не ответила."})
     if direct:
         prompt.insert(0, {"role": "system", "content": "Это прямое обращение или вопрос к тебе. Ответь по существу; не возвращай [SKIP], кроме если сообщение невозможно понять."})
     try:
