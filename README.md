@@ -36,3 +36,8 @@ Build from this repository using Dockerfile. Set the environment variables below
 
 ## Memory and privacy
 Stores recent group messages for context, usernames, a short group memory and settings. Long-term summaries are limited to game-related preferences, recurring jokes and group context; sensitive information is excluded by prompt. `/forget` removes long-term summary, `/clear` removes stored messages, summary and participant list. SQLite data persists only if Amvera storage is configured to persist the DB file. Do not put API secrets into GitHub.
+
+
+## FC Mobile live monitoring
+
+The built-in monitor checks public FC Mobile promo-code pages every 5 minutes and watches Google News RSS for EA updates, codes, player cards and gameplay/meta coverage. New codes are announced once in enabled groups where the bot has already received messages. Recent monitored articles and codes are supplied to Groq as context for relevant FC Mobile questions. Promo codes found on community sites are explicitly labelled unverified; EA's redemption page is the final check. See [monitoring details](docs/FC_MOBILE_MONITORING.md).
