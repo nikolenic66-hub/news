@@ -195,7 +195,7 @@ async def _get_text(client, url):
     parsed = urlparse(url)
     if parsed.hostname and parsed.hostname.endswith("news.google.com"):
         query = parse_qs(parsed.query).get("q", ["FC Mobile"])[0]
-        query = re.sub(r"\\bwhen:\\d+d\\b", "", query, flags=re.IGNORECASE).strip()
+        query = re.sub(r"\bwhen:\d+d\b", "", query, flags=re.IGNORECASE).strip()
         fallback_url = "https://www.bing.com/news/search?q=" + quote_plus(query or "FC Mobile") + "&format=rss"
         try:
             response = await client.get(fallback_url, headers=REQUEST_HEADERS, follow_redirects=True)
