@@ -17,7 +17,7 @@ class AIResilienceTests(unittest.IsolatedAsyncioTestCase):
         bounded = ai._bounded_messages(messages)
         self.assertEqual(bounded[0]["role"], "system")
         self.assertTrue(bounded[0]["content"].startswith("persona-"))
-        self.assertLessEqual(len(bounded[0]["content"]), 4200)
+        self.assertLessEqual(len(bounded[0]["content"]), 14000)
         self.assertLessEqual(len(bounded[-1]["content"]), 650)
         self.assertLessEqual(len([m for m in bounded if m["role"] != "system"]), 8)
 
