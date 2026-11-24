@@ -70,3 +70,11 @@ The added tests check the group persona guardrails and the safe-memory summariza
 - The summarizer keeps up to 60 recent messages, clips each message to 700 characters, and skips empty entries to bound request size.
 - If summarization fails, it retries after five more incoming messages instead of resetting the counter or retrying on every single update.
 - No database schema, provider, API, or deployment changes were introduced.
+
+## RenderZ player lookup hardening (2026-11-24)
+
+The existing public-page integration was tightened rather than replaced. Player labels are now normalized for accents and punctuation, and matching requires complete name tokens instead of a loose substring match. Explicit OVR filters remain exact; OVR-only requests do not select arbitrary cards. English player-data vocabulary and Russian-name aliases/transliteration improve request routing.
+
+No code or data was copied from the reviewed third-party bots. The implementation continues to read ordinary public RenderZ HTML only, with existing cache, request timeout and hard verification gate. A returned card is still only as complete and current as the visible RenderZ page.
+
+Added regression coverage for exact token matching, multi-word and accented names, transliteration, OVR-only requests and English player-data phrasing. This increment does not implement comparison workflows or squad optimization.
