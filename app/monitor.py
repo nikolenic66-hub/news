@@ -140,7 +140,7 @@ def parse_rss(xml_text):
 
 
 def _is_disallowed_source(entry):
-    """Exclude RenderZ until written permission for this bot use is obtained."""
+    """Exclude player-database providers until their terms permit this bot use."""
     source = (entry.get("source") or "").lower()
     source_url = (entry.get("source_url") or "").lower()
     article_url = (entry.get("url") or "").lower()
