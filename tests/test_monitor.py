@@ -1,4 +1,7 @@
+import os
 import unittest
+
+os.environ.setdefault('DB_PATH', ':memory:')
 
 from app.monitor import extract_active_codes, parse_rss
 
