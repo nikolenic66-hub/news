@@ -481,3 +481,20 @@ RSS-заголовок или сниппет не всегда содержит 
 ## 13. Group-agent behavior upgrade (2026-11-24)
 
 See [AGENT_BEHAVIOR_REWORK.md](AGENT_BEHAVIOR_REWORK.md) for the reviewed open-source architectures, implemented behavior changes, privacy decisions, and intentionally deferred components. The upgrade adapts ideas from Vusan, ThinkMate, and Groknul without importing their runtime stacks or copying implementation code. Existing FC Mobile freshness/source rules, no-tournament constraint, no-paid-API constraint, and current deployment architecture remain unchanged.
+
+
+## 2026-11-24 — RenderZ search reliability increment
+
+Implemented in `app/renderz.py`:
+
+- Normalize accents and punctuation before matching visible player-card labels.
+- Require every requested name token to be present as a complete token; do not accept partial substring coincidences.
+- Keep explicit OVR filtering when the user supplies a card rating.
+- Refuse OVR-only lookups that would otherwise return unrelated cards.
+- Recognize English player-data terms (player/card/stats/rating/price/rank/training/compare).
+- Expand Russian aliases for common FC Mobile players and add transliteration fallback for other Cyrillic names.
+- Continue using public RenderZ HTML pages only; no undocumented/private API or paid provider was added.
+
+Tests added for exact-token matching, multi-word names, accented names, OVR-only rejection, transliteration and English query detection.
+
+**Limitations:** this improves matching against the visible cards returned by RenderZ; it does not create a complete local card database or guarantee that RenderZ's public page returns every matching card. Multiple-card comparison and structured squad analysis remain separate future stages.
