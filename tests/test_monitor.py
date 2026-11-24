@@ -108,3 +108,23 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IntelDigestTests(unittest.TestCase):
+    def test_news_digest_keeps_only_fresh_dated_records(self):
+        now = datetime(2026, 11, 24, 17, 0, tzinfo=timezone.utc)
+        fresh = ("events_updates", "Текущий ивент", "Награды", "https://example.com/new", "Example", format_datetime(now - timedelta(hours=2)), "2026-11-24 16:00:00")
+        old = ("events_updates", "Старый ивент", "Устарело", "https://example.com/old", "Example", format_datetime(now - timedelta(days=30)), "2026-10-25 16:00:00")
+        missing_date = ("events_updates", "Без даты", "", "https://example.com/none", "Example", "", "2026-11-24 16:00:00")
+        digest = monitor.format_news_digest([fresh, old, missing_date], now=now)
+        self.assertIn("Текущий ивент", digest)
+        self.assertNotIn("Старый ивент", digest)
+        self.assertNotIn("Без даты", digest)
+        self.assertIn("https://example.com/new", digest)
+
+    def test_sources_digest_shows_source_and_fetch_time(self):
+        item = ("official_news", "EA update", "", "https://example.com/ea", "EA Sports", "Tue, 24 Nov 2026 16:00:00 GMT", "2026-11-24 16:10:00")
+        digest = monitor.format_sources_status([item])
+        self.assertIn("EA Sports", digest)
+        self.assertIn("официальный поиск", digest)
+        self.assertIn("2026-11-24 16:10:00", digest)
