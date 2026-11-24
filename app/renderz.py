@@ -232,7 +232,7 @@ def _format_card(card: dict, detail: dict | None = None) -> str:
 def _extract_search_query(message: str) -> str:
     value = re.sub(r"@\w+", " ", message or "")
     value = re.sub(
-        r"(?i)\b(найди|покажи|скажи|расскажи|кто|такой|это|мне|что|за|лучше|какой|какая|какое|сколько|сравни|карточка|карточку|карты|карта|игрок|игрока|овр|ovr|рейтинг|статы|характеристики|цена|стоит|сейчас|у|на|в|по|для|fc\s*mobile|fcm|фкм|фк\s*мобайл|player|players|card|cards|stats|statistics|rating|overall|price|market|rank|training|compare|versus|vs|who|what|is|the|of|for|in|a|an)\b",
+        r"(?i)\b(найди|покажи|скажи|расскажи|кто|такой|это|мне|что|за|лучше|какой|какая|какое|сколько|сравни|карточка|карточку|карты|карта|игрок|игрока|овр|ovr|рейтинг|статы|характеристики|цена|стоит|сейчас|у|на|в|по|для|fc\s*mobile|fcm|фкм|фк\s*мобайл|player|players|card|cards|stats|statistics|rating|overall|price|market|rank|training|compare|who|what|is|the|of|for|in|a|an)\b",
         " ", value,
     )
     value = re.sub(r"[^\w\s'-]", " ", value)
@@ -326,6 +326,7 @@ async def player_context(message: str, client) -> str:
     errors = []
     cards_by_url = {}
     successful_fetch = False
+    found_query_count = 0
     for player_query in search_queries:
         matched = []
         for url in (
@@ -341,6 +342,8 @@ async def player_context(message: str, client) -> str:
                     break
             except Exception as exc:
                 errors.append(type(exc).__name__)
+        if matched:
+            found_query_count += 1
         for card in matched:
             cards_by_url.setdefault(card["url"], card)
     cards = list(cards_by_url.values())[:MAX_RESULTS]
@@ -383,7 +386,7 @@ async def player_context(message: str, client) -> str:
         "Не достраивай ранг, тренировку или рыночную цену догадкой.\n"
         + (
             "\nНе все запрошенные имена удалось подтвердить. Не сравнивай и не додумывай отсутствующие карточки."
-            if len(search_queries) > len(cards) else ""
+            if len(search_queries) > found_query_count else ""
         )
         + "\n".join(blocks)
     )
