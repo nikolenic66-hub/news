@@ -93,7 +93,7 @@ def _player_links(source: str, query: str) -> list[dict]:
             "ovr": int(match.group(1)),
             "position": match.group(2).upper(),
         }
-        market_price = re.search(r"\\b(\\d+(?:\\.\\d+)?\\s*[KMB])\\b", label, re.I)
+        market_price = re.search(r"\b(\d+(?:\.\d+)?\s*[KMB])\b", label, re.I)
         if market_price:
             item["market_price"] = market_price.group(1).replace(" ", "")
         for key, pattern in {
@@ -130,13 +130,13 @@ def _detail_fields(source: str) -> dict:
         match = re.search(pattern, text, re.I)
         if match:
             result[label] = match.group(1).strip()
-    program = re.search(r"Dislike\\s+([A-Za-zÀ-ÿ0-9 '&-]{2,50}?)\\s+Player", text)
+    program = re.search(r"Dislike\s+([A-Za-zÀ-ÿ0-9 '&-]{2,50}?)\s+Player", text)
     if program:
         result["program"] = program.group(1).strip()
-    skill_moves = re.search(r"Skill Moves\\s+\\((\\d)\\)", text)
+    skill_moves = re.search(r"Skill Moves\s+\((\d)\)", text)
     if skill_moves:
         result["skill_moves"] = skill_moves.group(1)
-    strong_foot = re.search(r"STRONG FOOT / WEAK FOOT\\s+(RIGHT|LEFT)\\s+/\\s+\\((\\d)\\)", text)
+    strong_foot = re.search(r"STRONG FOOT / WEAK FOOT\s+(RIGHT|LEFT)\s+/\s+\((\d)\)", text)
     if strong_foot:
         result["strong_foot"] = strong_foot.group(1) + " / weak " + strong_foot.group(2)
     playstyle_names = (
