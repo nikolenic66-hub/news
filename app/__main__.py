@@ -118,7 +118,7 @@ async def handle_command(message, command, args):
 
     group_admin_commands = {
         "on", "off", "activity", "persona", "memory", "forget", "clear",
-        "missed", "missedlist", "played",
+        "missed", "missedlist", "played", "tournament", "finish", "poll",
     }
     if message.get("chat", {}).get("type") == "private" and command in group_admin_commands:
         await send(
@@ -131,7 +131,7 @@ async def handle_command(message, command, args):
     if command == "start":
         await send(chat_id, f"Я {BOT_NAME} — ИИ-игрок в чате FC Mobile. Обсуждаю карточки, составы и тактики, могу пошутить и иногда сам вклиниться в тему.\n/help", message.get("message_id"))
     elif command == "help":
-        await send(chat_id, "/status — настройки чата\n/on, /off — включить или выключить меня (админы)\n/activity 0-50 — шанс моей инициативы (админы)\n/persona текст — мой характер (админы)\n/memory — долговременная память (админы)\n/forget — очистить только память (админы)\n/clear — очистить историю и память (админы)\n/missed — отметить прогульщика ответом\n/missed @username турнир — добавить в список\n/missedlist — список прогульщиков\n/played — снять с списка ответом или @username\n\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
+        await send(chat_id, "/status — настройки чата\n/on, /off — включить или выключить меня (админы)\n/activity 0-50 — шанс моей инициативы (админы)\n/persona текст — мой характер (админы)\n/memory — долговременная память (админы)\n/forget — очистить только память (админы)\n/clear — очистить историю и память (админы)\n/missed — отметить прогульщика ответом\n/missed @username турнир — добавить в список\n/missedlist — список прогульщиков\n/played — снять с списка ответом или @username\n/stats — твоя статистика в чате\n/top — рейтинг активности\n/tournament название — открыть регистрацию (админ)\n/join — записаться в турнир\n/participants — список участников\n/finish — закрыть регистрацию (админ)\n/poll вопрос | вариант 1 | вариант 2 — опрос (админ)\n\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
     elif command == "missed":
         if not await is_admin(message):
             await send(chat_id, "Турнирный список меняют администраторы.", message.get("message_id")); return
@@ -163,6 +163,55 @@ async def handle_command(message, command, args):
             await send(chat_id, "Ответь на сообщение игрока /played или напиши /played @username.", message.get("message_id")); return
         removed = await remove_missed(chat_id, target["id"])
         await send(chat_id, "Снял с списка прогульщиков. Турнир сыгран! 🏆" if removed else "Его не было в списке.", message.get("message_id"))
+    elif command == "stats":
+        stats = await get_user_stats(chat_id, user.get("id"))
+        await send(chat_id, f"Твоя статистика в этом чате: сообщений — {stats['messages']}. Последняя активность: {stats['last_seen'] or 'пока нет данных'}.", message.get("message_id"))
+    elif command == "top":
+        rows = await get_top_users(chat_id, 10)
+        if not rows:
+            answer = "Пока статистики нет."
+        else:
+            answer = "🏆 Актив чата по сообщениям:\n" + "\n".join(f"{i}. {row[1] or 'Игрок'} — {row[3]}" for i, row in enumerate(rows, 1))
+        await send(chat_id, answer, message.get("message_id"))
+    elif command == "tournament":
+        if not await is_admin(message):
+            await send(chat_id, "Открыть регистрацию может администратор.", message.get("message_id")); return
+        if not args:
+            await send(chat_id, "Напиши название: /tournament Кубок выходного дня", message.get("message_id")); return
+        tid = await create_tournament(chat_id, args)
+        await send(chat_id, f"🏆 Открыл регистрацию на «{args}»! Участие: /join. Список: /participants. Закрыть: /finish.", message.get("message_id"))
+    elif command == "join":
+        active = await get_open_tournament(chat_id)
+        if not active:
+            await send(chat_id, "Сейчас нет открытой регистрации.", message.get("message_id")); return
+        added = await join_tournament(active[0], user["id"], user_name(user), user.get("username"))
+        await send(chat_id, "Записал тебя на «" + active[1] + "»! ⚽" if added else "Ты уже в списке участников.", message.get("message_id"))
+    elif command == "participants":
+        active = await get_open_tournament(chat_id)
+        if not active:
+            await send(chat_id, "Нет открытого турнира.", message.get("message_id")); return
+        rows = await tournament_participants(active[0])
+        answer = "Участники «" + active[1] + "»:\n" + ("\n".join(f"{i}. {row[0]}" for i, row in enumerate(rows, 1)) if rows else "Пока никто не записался.")
+        await send(chat_id, answer, message.get("message_id"))
+    elif command == "finish":
+        if not await is_admin(message):
+            await send(chat_id, "Закрыть регистрацию может администратор.", message.get("message_id")); return
+        active = await get_open_tournament(chat_id)
+        if not active:
+            await send(chat_id, "Нет открытого турнира.", message.get("message_id")); return
+        await close_tournament(active[0])
+        rows = await tournament_participants(active[0])
+        answer = f"Регистрация на «{active[1]}» закрыта. Участников: {len(rows)}."
+        if rows:
+            answer += "\n" + "\n".join(f"{i}. {row[0]}" for i, row in enumerate(rows, 1))
+        await send(chat_id, answer, message.get("message_id"))
+    elif command == "poll":
+        if not await is_admin(message):
+            await send(chat_id, "Создавать опросы могут администраторы.", message.get("message_id")); return
+        parts = [part.strip() for part in args.split("|")]
+        if len(parts) < 3 or not parts[0] or any(not p for p in parts[1:]) or len(parts) > 11:
+            await send(chat_id, "Формат: /poll За кого болеем? | Реал | Барса (от 2 до 10 вариантов).", message.get("message_id")); return
+        await telegram("sendPoll", chat_id=chat_id, question=parts[0][:300], options=parts[1:], is_anonymous=False, allows_multiple_answers=False)
     elif command == "status":
         settings = await get_settings(chat_id)
         chance = REPLY_PROBABILITY if settings["activity"] is None else settings["activity"]
