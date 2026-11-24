@@ -95,8 +95,22 @@ async def reply(messages, persona, image_data=None, image_mime='image/jpeg'):
 
 
 async def summarize(memory, messages):
+    """Refresh compact group memory from the recent retained conversation."""
     if not messages:
         return memory or ""
+
+    # Bound both the number and size of messages so a busy chat cannot create
+    # an unexpectedly huge memory request. Keep enough turns to preserve context.
+    recent_messages = messages[-60:]
+    formatted_messages = []
+    for message in recent_messages:
+        content = str(message.get("content") or "").strip()
+        if content:
+            formatted_messages.append(content[:700])
+
+    if not formatted_messages:
+        return memory or ""
+
     prompt = (
         "Обнови краткую общую память игрового группового чата. "
         "Это память о контексте комнаты, а не личное досье участников. "
@@ -111,7 +125,7 @@ async def summarize(memory, messages):
         "Русский язык, максимум 1000 символов. Предыдущая память:\n"
         + (memory or "пусто")
         + "\nСвежие сообщения (имя автора указано в тексте):\n"
-        + "\n".join(m["content"] for m in messages[-30:])
+        + "\n".join(formatted_messages)
     )
     result = await _completion(
         [
