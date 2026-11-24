@@ -289,7 +289,13 @@ async def main():
     if not BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
     if not AI_KEY:
-        log.warning("AI key missing: set AI_API_KEY or DEEPSEEK_API_KEY")
+        log.error("APINEX_API_KEY is missing; AI replies are disabled")
+    log.info(
+        "AI config: provider=APInex base_url=%s model=%s key_configured=%s",
+        __import__("app.config", fromlist=["AI_BASE_URL"]).AI_BASE_URL,
+        __import__("app.config", fromlist=["AI_MODEL"]).AI_MODEL,
+        bool(AI_KEY),
+    )
     HTTP = httpx.AsyncClient(timeout=httpx.Timeout(45, connect=15))
     try:
         log.info("Startup: initializing SQLite")
