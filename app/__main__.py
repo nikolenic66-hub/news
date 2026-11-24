@@ -334,6 +334,10 @@ async def main():
         await init_db()
         me = await telegram("getMe")
         BOT_ID, BOT_USERNAME = me["id"], me.get("username")
+        try:
+            await telegram("setMyName", name=BOT_NAME)
+        except Exception:
+            log.warning("Could not update Telegram profile name automatically")
         log.info("Telegram API connected as @%s (id=%s)", BOT_USERNAME, BOT_ID)
         await telegram("deleteWebhook", drop_pending_updates=False)
         asyncio.create_task(monitor_loop(HTTP, broadcast_promo_alert))
