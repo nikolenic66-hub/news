@@ -94,7 +94,7 @@ async def _completion(messages, temperature=0.8, max_tokens=450, model=None):
                     if response.status_code == 429 and attempt < 2:
                         detail = (response.text or "").strip().replace("\n", " ")[:1200]
                         retry_after = response.headers.get("retry-after", "")
-                        match = re.search(r"try again in ([0-9]+(?:\\.[0-9]+)?)s", detail, re.IGNORECASE)
+                        match = re.search(r"try again in ([0-9]+(?:\.[0-9]+)?)s", detail, re.IGNORECASE)
                         delay = float(retry_after) if retry_after.replace(".", "", 1).isdigit() else (float(match.group(1)) if match else 5.0)
                         delay = min(30.0, max(1.0, delay))
                         # Do not re-queue at once or create a retry storm.
