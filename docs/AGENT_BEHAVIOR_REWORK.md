@@ -78,3 +78,5 @@ The existing public-page integration was tightened rather than replaced. Player 
 No code or data was copied from the reviewed third-party bots. The implementation continues to read ordinary public RenderZ HTML only, with existing cache, request timeout and hard verification gate. A returned card is still only as complete and current as the visible RenderZ page.
 
 Added regression coverage for exact token matching, multi-word and accented names, transliteration, OVR-only requests and English player-data phrasing. This increment does not implement comparison workflows or squad optimization.
+
+The public list uses a `page=N` pagination link, which was confirmed against the current RenderZ player-list pages. The bot now scans at most eight public pages per requested player and stops on the first page with matching cards. The old speculative `search=` and `q=` URL guesses were removed. Multi-player query connectors are preserved and each requested name is searched independently; the context marks incomplete matches so the model must not fabricate a comparison.
