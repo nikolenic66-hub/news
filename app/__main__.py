@@ -294,7 +294,7 @@ async def main():
         "AI config: provider=APInex base_url=%s model=%s key_configured=%s",
         APINEX_API_URL,
         APINEX_MODEL,
-        bool(AI_KEY),
+        bool(APINEX_API_KEY),
     )
     HTTP = httpx.AsyncClient(timeout=httpx.Timeout(45, connect=15))
     try:
