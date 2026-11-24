@@ -67,7 +67,9 @@ def _parse_html(source: str) -> _PageText:
 
 def _player_links(source: str, query: str) -> list[dict]:
     parser = _parse_html(source)
-    query_words = [w.casefold() for w in re.findall(r"[\w'-]+", query) if len(w) > 1]
+    query_words = [w.casefold() for w in re.findall(r"[A-Za-zÀ-ÿ'-]+", query) if len(w) > 1]
+    requested_ovr_match = re.search(r"\b(\d{2,3})\b", query)
+    requested_ovr = int(requested_ovr_match.group(1)) if requested_ovr_match else None
     found = []
     seen = set()
     for href, label in parser.links:
