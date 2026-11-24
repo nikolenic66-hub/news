@@ -47,5 +47,27 @@ class PersistentActivityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await storage.get_user_stats(-100, 7))["messages"], 0)
 
 
+    async def test_recent_promo_codes_use_last_seen_not_first_seen(self):
+        await storage.save_promo_code("OLD_BUT_MENTIONED_AGAIN", "EA feed", "https://example.com/new")
+        await storage.save_promo_code("STALE_CODE", "EA feed", "https://example.com/old")
+        async with aiosqlite.connect(storage.DB_PATH) as db:
+            await db.execute(
+                "UPDATE promo_codes SET first_seen=datetime('now','-20 days'), "
+                "last_seen=CURRENT_TIMESTAMP WHERE code=?",
+                ("OLD_BUT_MENTIONED_AGAIN",),
+            )
+            await db.execute(
+                "UPDATE promo_codes SET first_seen=CURRENT_TIMESTAMP, "
+                "last_seen=datetime('now','-3 days') WHERE code=?",
+                ("STALE_CODE",),
+            )
+            await db.commit()
+
+        rows = await storage.get_recent_promo_codes(8)
+        codes = [row[0] for row in rows]
+        self.assertIn("OLD_BUT_MENTIONED_AGAIN", codes)
+        self.assertNotIn("STALE_CODE", codes)
+        self.assertTrue(all(len(row) == 5 for row in rows))
+
 if __name__ == "__main__":
     unittest.main()
