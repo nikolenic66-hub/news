@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from .config import BOT_TOKEN, APINEX_API_KEY, APINEX_API_URL, APINEX_MODEL, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY
+from .config import BOT_TOKEN, GROQ_API_KEY, GROQ_API_URL, GROQ_MODEL, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY
 from .storage import (
     init_db, add_message, history, get_memory, save_memory, get_settings,
     set_setting, user_count, clear_chat, mark_missed, get_missed,
@@ -18,6 +18,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+# Telegram bot tokens are embedded in Bot API URL paths. Never log httpx
+# request URLs, otherwise the token is exposed in Amvera application logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 log = logging.getLogger("fc-mate")
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 HTTP = None
@@ -93,8 +97,6 @@ async def handle_command(message, command, args):
     reply_message = message.get("reply_to_message") or {}
     target = reply_message.get("from") or None
 
-    # Group settings and tournament administration must be changed in the
-    # group itself, where Telegram lets us verify the sender's admin status.
     group_admin_commands = {
         "on", "off", "activity", "persona", "memory", "forget", "clear",
         "missed", "missedlist", "played",
@@ -108,9 +110,9 @@ async def handle_command(message, command, args):
         return
 
     if command == "start":
-        await send(chat_id, f"Я {BOT_NAME} — ИИ-игрок в чате FC Mobile. Обсуждаю карточки, составы и тактики, могу пошутить и иногда сам вклиниться в тему.\n/help", message.get("message_id"))
+        await send(chat_id, f"Я {BOT_NAME} — ИИ-игрок в чате FC Mobile. Обсуждаю карточки, составы и тактики, могу пошутить и иногда сам вклиниться в тему.\\n/help", message.get("message_id"))
     elif command == "help":
-        await send(chat_id, "/status — настройки чата\n/on, /off — включить или выключить меня (админы)\n/activity 0-50 — шанс моей инициативы (админы)\n/persona текст — мой характер (админы)\n/memory — долговременная память (админы)\n/forget — очистить только память (админы)\n/clear — очистить историю и память (админы)\n/missed — отметить прогульщика ответом\n/missed @username турнир — добавить в список\n/missedlist — список прогульщиков\n/played — снять с списка ответом или @username\n\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
+        await send(chat_id, "/status — настройки чата\\n/on, /off — включить или выключить меня (админы)\\n/activity 0-50 — шанс моей инициативы (админы)\\n/persona текст — мой характер (админы)\\n/memory — долговременная память (админы)\\n/forget — очистить только память (админы)\\n/clear — очистить историю и память (админы)\\n/missed — отметить прогульщика ответом\\n/missed @username турнир — добавить в список\\n/missedlist — список прогульщиков\\n/played — снять с списка ответом или @username\\n\\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
     elif command == "missed":
         if not await is_admin(message):
             await send(chat_id, "Турнирный список меняют администраторы.", message.get("message_id")); return
@@ -130,7 +132,7 @@ async def handle_command(message, command, args):
         if not await is_admin(message):
             await send(chat_id, "Только администраторы.", message.get("message_id")); return
         rows = await get_missed(chat_id)
-        await send(chat_id, "Список прогульщиков:\n" + "\n".join(f"• {name} — «{tour}»" for _, _, name, tour, _ in rows) if rows else "Список прогульщиков пуст.", message.get("message_id"))
+        await send(chat_id, "Список прогульщиков:\\n" + "\\n".join(f"• {name} — «{tour}»" for _, _, name, tour, _ in rows) if rows else "Список прогульщиков пуст.", message.get("message_id"))
     elif command == "played":
         if not await is_admin(message):
             await send(chat_id, "Только администраторы.", message.get("message_id")); return
@@ -145,7 +147,7 @@ async def handle_command(message, command, args):
     elif command == "status":
         settings = await get_settings(chat_id)
         chance = REPLY_PROBABILITY if settings["activity"] is None else settings["activity"]
-        await send(chat_id, f"FC Mate: {'активен' if settings['enabled'] else 'выключен'}\nИнициатива: {chance*100:.0f}%\nЗапомненных участников: {await user_count(chat_id)}\nПрогульщиков турнира: {len(await get_missed(chat_id))}", message.get("message_id"))
+        await send(chat_id, f"FC Mate: {'активен' if settings['enabled'] else 'выключен'}\\nИнициатива: {chance*100:.0f}%\\nЗапомненных участников: {await user_count(chat_id)}\\nПрогульщиков турнира: {len(await get_missed(chat_id))}", message.get("message_id"))
     elif command in ("on", "off"):
         if not await is_admin(message):
             await send(chat_id, "Только администраторы группы.", message.get("message_id")); return
@@ -168,7 +170,7 @@ async def handle_command(message, command, args):
     elif command == "persona":
         settings = await get_settings(chat_id)
         if not args:
-            await send(chat_id, "Текущий характер:\n" + (settings["persona"] or PERSONA), message.get("message_id")); return
+            await send(chat_id, "Текущий характер:\\n" + (settings["persona"] or PERSONA), message.get("message_id")); return
         if not await is_admin(message):
             await send(chat_id, "Настройку меняют администраторы.", message.get("message_id")); return
         await set_setting(chat_id, "persona", args)
@@ -209,8 +211,6 @@ async def handle_message(message):
     if not is_private and chat.get("type") not in ("group", "supergroup"):
         return
 
-    # Private chat is always a direct conversation. In groups, keep the
-    # existing mention/reply trigger and low-frequency spontaneous behavior.
     await add_message(chat_id, user["id"], user.get("username"), name, "user", f"{name}: {text_in}")
     summary_counter[chat_id] = summary_counter.get(chat_id, 0) + 1
     if summary_counter[chat_id] >= 60:
@@ -288,13 +288,13 @@ async def main():
     global HTTP, BOT_ID, BOT_USERNAME
     if not BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
-    if not APINEX_API_KEY:
-        log.error("APINEX_API_KEY is missing; AI replies are disabled")
+    if not GROQ_API_KEY:
+        log.error("GROQ_API_KEY is missing; AI replies are disabled")
     log.info(
-        "AI config: provider=APInex base_url=%s model=%s key_configured=%s",
-        APINEX_API_URL,
-        APINEX_MODEL,
-        bool(APINEX_API_KEY),
+        "AI config: provider=Groq base_url=%s model=%s key_configured=%s",
+        GROQ_API_URL,
+        GROQ_MODEL,
+        bool(GROQ_API_KEY),
     )
     HTTP = httpx.AsyncClient(timeout=httpx.Timeout(45, connect=15))
     try:
