@@ -2,14 +2,20 @@ import asyncio,random,time,logging,sys
 logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(name)s: %(message)s',stream=sys.stdout,force=True)
 log=logging.getLogger('fc-mate-startup')
 log.info('Python entrypoint reached; imports are starting')
+log.info('Import stage 1: aiogram')
 from aiogram import Bot,Dispatcher,F
 from aiogram.filters import Command,CommandStart
 from aiogram.types import Message
 from aiogram.enums import ChatType
+log.info('Import stage 2: configuration')
 from .config import BOT_TOKEN,AI_KEY,BOT_NAME,PERSONA,ADMIN_IDS,REPLY_PROBABILITY
+log.info('Import stage 3: storage')
 from .storage import init_db,add_message,history,get_memory,save_memory,get_settings,set_setting,user_count,clear_chat,mark_missed,get_missed,find_user,remove_missed,update_reminder,get_missed_chats
+log.info('Import stage 4: logic')
 from .logic import is_fc_topic,is_direct_message,should_spontaneously_reply
+log.info('Import stage 5: AI client')
 from .ai import reply,summarize,ProviderError
+log.info('All imports completed successfully')
 log=logging.getLogger("fc-mate")
 if not BOT_TOKEN:
  log.critical("Startup configuration error: TELEGRAM_BOT_TOKEN is missing")
