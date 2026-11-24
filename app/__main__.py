@@ -347,13 +347,33 @@ async def handle_message(message):
     if intel_context:
         prompt.insert(0, {"role": "system", "content": intel_context})
     if not has_image and is_player_data_question(text_in):
+        # Player facts are a hard-gated data task: never let the language model
+        # answer from memory when RenderZ did not return a verified card.
         try:
             card_context = await player_context(text_in, HTTP)
-            if card_context:
-                prompt.insert(0, {"role": "system", "content": card_context})
         except Exception:
             log.exception("RenderZ player lookup failed")
-            prompt.insert(0, {"role": "system", "content": "Поиск карточки в RenderZ сейчас недоступен. Не придумывай OVR, характеристики, ранг или цену; честно сообщи, что база временно не ответила."})
+            card_context = ""
+        if not card_context.startswith("ПРОВЕРЕННЫЕ ДАННЫЕ КАРТОЧЕК RENDERZ"):
+            if "не найдена" in card_context:
+                failure = "Поискал в RenderZ, но подходящую карточку не нашёл. Не буду придумывать OVR и статы. Напиши имя латиницей или уточни OVR/программу карты."
+            elif "недоступны" in card_context or not card_context:
+                failure = "RenderZ сейчас не дал проверить карточку. Поэтому точные OVR и характеристики не назову, чтобы не наврать. Попробуй повторить запрос чуть позже."
+            else:
+                failure = "Не получилось подтвердить карточку в RenderZ. Не буду угадывать OVR и характеристики."
+            await send(chat_id, failure, message.get("message_id"))
+            await add_message(chat_id, None, None, BOT_NAME, "assistant", failure)
+            last_bot_reply[chat_id] = time.time()
+            return
+        prompt.insert(0, {
+            "role": "system",
+            "content": (
+                card_context
+                + "\\n\\nЖЁСТКОЕ ПРАВИЛО: отвечай на вопрос об игроке только по карточкам и полям, "
+                "которые явно перечислены выше. Не добавляй цифры, ранги, тренировку, цену, программу "
+                "или характеристики из памяти модели. Если карточка не та или нужного поля нет — скажи об этом."
+            ),
+        })
     if direct:
         prompt.insert(0, {"role": "system", "content": "Это прямое обращение или вопрос к тебе. Ответь по существу; не возвращай [SKIP], кроме если сообщение невозможно понять."})
     try:
