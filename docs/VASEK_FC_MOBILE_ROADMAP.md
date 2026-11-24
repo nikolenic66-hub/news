@@ -525,4 +525,4 @@ Tests added for exact-token matching, multi-word names, accented names, OVR-only
 - **Problem:** comparing multiple players repeated the same public RenderZ list-page requests once per requested name.
 - **Change:** each list page is now fetched once per lookup and checked against every still-unmatched player name; detail pages are fetched only for matched cards.
 - **Safety:** exact card fields still come only from parsed public RenderZ pages; no new endpoints or external services were added.
-- **Verification:** added a regression test asserting that a two-player comparison uses one shared list-page fetch plus one detail fetch per matched card. CI result is pending.
+- **Verification:** added a regression test asserting that a two-player comparison uses one shared list-page fetch plus one detail fetch per matched card. GitHub Actions passed (`compileall` + full `unittest` suite) for commit `d6e13df8beef427fa2e651525139550ea2c6fa8b`; Amvera/Telegram runtime behavior remains unverified.
