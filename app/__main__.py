@@ -13,7 +13,7 @@ from .storage import (
     set_setting, user_count, clear_chat, get_enabled_group_chats,
     get_user_stats, get_top_users, get_recent_intel,
 )
-from .logic import is_fc_topic, is_bot_name_call
+from .logic import is_fc_topic, is_bot_name_call, is_recent_bot_followup
 from .ai import reply, summarize, ProviderError
 from .monitor import monitor_loop, build_intel_context, format_news_digest, format_sources_status
 from .renderz import player_context, is_player_data_question
@@ -33,6 +33,7 @@ BOT_ID = None
 BOT_USERNAME = None
 last_spontaneous = {}
 last_direct = {}
+last_bot_reply = {}
 summary_counter = {}
 
 class TelegramAPIError(RuntimeError):
@@ -264,10 +265,15 @@ async def handle_message(message):
     settings = await get_settings(chat_id)
     if not settings["enabled"]:
         return
-    direct = is_private or message_mentions_bot(message, text_in) or message_is_reply_to_bot(message) or is_bot_name_call(text_in)
     now = time.time()
+    recent_history = await history(chat_id)
+    previous_role = recent_history[-2]["role"] if len(recent_history) >= 2 else None
+    followup = (not is_private) and is_recent_bot_followup(
+        text_in, previous_role, now - last_bot_reply.get(chat_id, 0)
+    )
+    direct = is_private or message_mentions_bot(message, text_in) or message_is_reply_to_bot(message) or is_bot_name_call(text_in) or followup
     if direct and not is_private:
-        if now - last_direct.get(chat_id, 0) < 12:
+        if not followup and now - last_direct.get(chat_id, 0) < 12:
             return
         last_direct[chat_id] = now
     elif not is_private:
@@ -301,7 +307,7 @@ async def handle_message(message):
                 + memory
             ),
         })
-    prompt.extend(await history(chat_id))
+    prompt.extend(recent_history)
     # The reply target may have fallen outside the stored history window.
     # Supply it explicitly, while treating its text as untrusted quoted data.
     replied = message.get("reply_to_message") or {}
@@ -352,6 +358,7 @@ async def handle_message(message):
         if answer:
             await send(chat_id, answer, message.get("message_id"))
             await add_message(chat_id, None, None, BOT_NAME, "assistant", answer)
+            last_bot_reply[chat_id] = time.time()
             if not direct:
                 last_spontaneous[chat_id] = now
     except ProviderError as exc:
