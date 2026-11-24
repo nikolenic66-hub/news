@@ -39,11 +39,6 @@ NEWS_FEEDS = (
         "events_updates",
     ),
     (
-        "RenderZ FC Mobile cards and event guides",
-        "https://news.google.com/rss/search?q=site%3Arenderz.app%2Fnews+FC+Mobile+when%3A14d&hl=en-US&gl=US&ceid=US:en",
-        "cards_events",
-    ),
-    (
         "FC Mobile cards, gameplay and meta",
         "https://news.google.com/rss/search?q=FC+Mobile+player+cards+gameplay+meta+when%3A7d&hl=en-US&gl=US&ceid=US:en",
         "gameplay_news",
@@ -131,6 +126,7 @@ def parse_rss(xml_text):
         published = (item.findtext("pubDate") or "").strip()
         source_node = item.find("source")
         source = (source_node.text or "").strip() if source_node is not None else "Google News"
+        source_url = source_node.attrib.get("url", "").strip() if source_node is not None else ""
         if title and url:
             entries.append({
                 "title": title[:500],
@@ -138,8 +134,17 @@ def parse_rss(xml_text):
                 "summary": description[:2500],
                 "published": published,
                 "source": source[:100],
+                "source_url": source_url[:1000],
             })
     return entries
+
+
+def _is_disallowed_source(entry):
+    """Exclude RenderZ until written permission for this bot use is obtained."""
+    source = (entry.get("source") or "").lower()
+    source_url = (entry.get("source_url") or "").lower()
+    article_url = (entry.get("url") or "").lower()
+    return "renderz" in source or "renderz.app" in source_url or "renderz.app" in article_url
 
 
 def _codes_from_recent_article(entry):
@@ -203,6 +208,8 @@ async def check_news_once(client):
         try:
             feed = await _get_text(client, url)
             for entry in parse_rss(feed):
+                if _is_disallowed_source(entry):
+                    continue
                 published_dt = _parse_date(entry["published"])
                 if not published_dt:
                     continue
@@ -279,6 +286,8 @@ async def build_intel_context(query, client=None):
                 feed = await _get_text(client, search_url)
                 current_time = datetime.now(timezone.utc)
                 for entry in parse_rss(feed):
+                    if _is_disallowed_source(entry):
+                        continue
                     published = _parse_date(entry.get("published"))
                     if not published or not (-6 * 3600 <= (current_time - published).total_seconds() <= 7 * 24 * 3600):
                         continue
