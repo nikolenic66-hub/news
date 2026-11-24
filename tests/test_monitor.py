@@ -76,8 +76,8 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
 
         fresh_date = format_datetime(datetime.now(timezone.utc) - timedelta(hours=2))
         stale_date = format_datetime(datetime.now(timezone.utc) - timedelta(days=90))
-        fresh = ("events_updates", "FC Mobile Rivals event guide", "New event rewards", "https://example.com/fresh", "Example", fresh_date)
-        stale = ("official_news", "Old FIFA Mobile 2024 update", "Old data", "https://example.com/old", "Example", stale_date)
+        fresh = ("events_updates", "FC Mobile Rivals event guide", "New event rewards", "https://example.com/fresh", "Example", fresh_date, "2026-11-24 17:00:00")
+        stale = ("official_news", "Old FIFA Mobile 2024 update", "Old data", "https://example.com/old", "Example", stale_date, "2026-08-26 10:00:00")
 
         with patch.object(monitor.time, "monotonic", return_value=10000), \
              patch.object(monitor, "_last_question_refresh", 0), \
@@ -91,6 +91,8 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("FC Mobile Rivals event guide", context)
         self.assertNotIn("Old FIFA Mobile 2024 update", context)
         self.assertIn("АКТУАЛЬНОСТЬ", context)
+        self.assertIn("получено ботом: 2026-11-24 17:00:00 UTC", context)
+        self.assertIn("сообщество/вторичный источник", context)
         self.assertIn("when%3A14d", fetch.await_args.args[1])
 
     async def test_empty_live_context_explicitly_rejects_old_knowledge(self):
