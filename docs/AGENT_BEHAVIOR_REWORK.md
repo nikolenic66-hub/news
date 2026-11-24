@@ -62,3 +62,11 @@ The added tests check the group persona guardrails and the safe-memory summariza
 - Ambient replies require a substantive FC Mobile message, the existing activity probability and cooldown, and are suppressed when the message is an explicit reply to a human or immediately follows a bot reply. Direct mentions, bot replies, and recognized follow-ups still take the direct path.
 - Recap behavior is explicitly constrained: summarize only the history actually supplied, distinguish participants' positions, and identify a speaker only when attribution is present. Missing history must be acknowledged rather than invented.
 - No extra model call, paid service, background scheduler, or database migration was introduced.
+
+## Conversation-memory reliability increment (2026-11-24)
+
+- The previous summary trigger waited for 60 incoming messages but passed only the default 16-message history window to the summarizer. This could silently omit much of the conversation that triggered the refresh.
+- Memory refresh now runs every 30 incoming messages and reads the full retained history window (MAX_HISTORY * 3 rows).
+- The summarizer keeps up to 60 recent messages, clips each message to 700 characters, and skips empty entries to bound request size.
+- If summarization fails, it retries after five more incoming messages instead of resetting the counter or retrying on every single update.
+- No database schema, provider, API, or deployment changes were introduced.
