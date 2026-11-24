@@ -7,6 +7,7 @@ controls. Keep requests low-volume and cache results.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
 from html.parser import HTMLParser
@@ -15,6 +16,8 @@ from urllib.parse import quote_plus, urljoin
 BASE_URL = "https://renderz.app"
 PLAYERS_URL = BASE_URL + "/players"
 CACHE_TTL = 600
+NEGATIVE_CACHE_TTL = 45
+log = logging.getLogger(__name__)
 REQUEST_TIMEOUT = 18
 MAX_RESULTS = 4
 
@@ -256,8 +259,10 @@ async def player_context(message: str, client) -> str:
     cache_key = query.casefold()
     async with _cache_lock:
         cached = _cache.get(cache_key)
-        if cached and time.monotonic() - cached[0] < CACHE_TTL:
-            return cached[1]
+        if cached:
+            ttl = CACHE_TTL if is_verified_player_context(cached[1]) else NEGATIVE_CACHE_TTL
+            if time.monotonic() - cached[0] < ttl:
+                return cached[1]
 
     # Use the public player-list page, not undocumented JSON/mobile endpoints.
     # The search parameter is a normal page URL; results are accepted only when
@@ -281,11 +286,13 @@ async def player_context(message: str, client) -> str:
 
     if not cards:
         if successful_fetch:
+            log.info("RenderZ pages loaded but no matching public card was parsed for query=%r", query)
             context = (
                 "ДАННЫЕ RENDERZ: по запросу «" + query + "» карточка не найдена в публичном списке. "
                 "Не выдумывай OVR, статы, ранг или цену. Уточни латинское написание имени либо версию карточки."
             )
         else:
+            log.warning("RenderZ public player pages unavailable for query=%r; errors=%s", query, errors[:3])
             context = (
                 "ДАННЫЕ RENDERZ: публичные страницы сейчас недоступны"
                 + (" (" + ", ".join(errors[:3]) + ")" if errors else "")
@@ -295,6 +302,7 @@ async def player_context(message: str, client) -> str:
             _cache[cache_key] = (time.monotonic(), context)
         return context
 
+    log.info("RenderZ parsed %s matching player card(s) for query=%r", len(cards), query)
     blocks = []
     # Fetch only the best matching page, keeping request volume low.
     for card in cards[:2]:
