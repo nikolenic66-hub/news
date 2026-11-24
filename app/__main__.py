@@ -11,11 +11,11 @@ from .config import BOT_TOKEN, GROQ_API_KEY, GROQ_API_URL, GROQ_MODEL, GROQ_VISI
 from .storage import (
     init_db, add_message, history, get_memory, save_memory, get_settings,
     set_setting, user_count, clear_chat, get_enabled_group_chats,
-    get_user_stats, get_top_users,
+    get_user_stats, get_top_users, get_recent_intel,
 )
 from .logic import is_fc_topic
 from .ai import reply, summarize, ProviderError
-from .monitor import monitor_loop, build_intel_context
+from .monitor import monitor_loop, build_intel_context, format_news_digest, format_sources_status
 
 logging.basicConfig(
     level=logging.INFO,
@@ -123,7 +123,13 @@ async def handle_command(message, command, args):
     if command == "start":
         await send(chat_id, f"Я {BOT_NAME} — свой человек в чате FC Mobile. Обсуждаю карточки, составы и тактики, могу пошутить и иногда сам вклиниться в тему.\n/help", message.get("message_id"))
     elif command == "help":
-        await send(chat_id, "/status — настройки чата\n/on, /off — включить или выключить меня (админы)\n/activity 0-50 — шанс моей инициативы (админы)\n/persona текст — мой характер (админы)\n/memory — долговременная память (админы)\n/forget — очистить только память (админы)\n/clear — очистить историю и память (админы)\n/stats — твоя статистика в чате\n/top — рейтинг активности\n/poll вопрос | вариант 1 | вариант 2 — опрос (админ)\n\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
+        await send(chat_id, "/status — настройки чата\n/on, /off — включить или выключить меня (админы)\n/activity 0-50 — шанс моей инициативы (админы)\n/persona текст — мой характер (админы)\n/memory — долговременная память (админы)\n/forget — очистить только память (админы)\n/clear — очистить историю и память (админы)\n/stats — твоя статистика в чате\n/top — рейтинг активности\n/news — свежие новости FC Mobile\n/sources — источники и время обновления\n/poll вопрос | вариант 1 | вариант 2 — опрос (админ)\n\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
+    elif command == "news":
+        answer = format_news_digest(await get_recent_intel(20), limit=6)
+        await send(chat_id, "📰 Новости FC Mobile\n\n" + answer, message.get("message_id"))
+    elif command == "sources":
+        answer = format_sources_status(await get_recent_intel(20), limit=8)
+        await send(chat_id, "🔎 Источники Васька\n\n" + answer, message.get("message_id"))
     elif command == "stats":
         stats = await get_user_stats(chat_id, user.get("id"))
         await send(chat_id, f"Твоя статистика в этом чате: сообщений — {stats['messages']}. Последняя активность: {stats['last_seen'] or 'пока нет данных'}.", message.get("message_id"))
