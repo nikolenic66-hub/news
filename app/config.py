@@ -13,10 +13,12 @@ def _int_env(name, default, low, high):
     except (TypeError, ValueError):
         return default
 
+# Apinex is the single AI provider. Keep the environment names aligned
+# with the Amvera variables used by this deployment.
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-AI_KEY = (os.getenv("AI_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or "").strip()
-AI_BASE_URL = (os.getenv("AI_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com/v1").strip().rstrip("/")
-AI_MODEL = (os.getenv("AI_MODEL") or os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip()
+AI_KEY = os.getenv("APINEX_API_KEY", "").strip()
+AI_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.apinex.bond/v1").strip().rstrip("/")
+AI_MODEL = os.getenv("DEEPSEEK_MODEL", "free/deepseek-v4-pro-0813").strip()
 BOT_NAME = os.getenv("BOT_NAME", "FC Mate").strip() or "FC Mate"
 PERSONA = os.getenv("BOT_PERSONA", "Дружелюбный, смешной фанат FC Mobile, иногда язвительный, без токсичности.")
 ADMIN_IDS = {int(value.strip()) for value in os.getenv("ADMIN_IDS", "").split(",") if value.strip().isdigit()}
