@@ -105,7 +105,7 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
             context = await monitor.build_intel_context("Какие сейчас новые карты FC Mobile?")
 
         self.assertIn("СВЕЖИХ ПУБЛИКАЦИЙ НЕ НАЙДЕНО", context)
-        self.assertIn("не называй старые сведения актуальными", context)
+        self.assertIn("свежий факт сейчас подтвердить не удалось", context)
 
 if __name__ == "__main__":
     unittest.main()
