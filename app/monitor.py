@@ -140,11 +140,11 @@ def parse_rss(xml_text):
 
 
 def _is_disallowed_source(entry):
-    """Exclude player-database providers until their terms permit this bot use."""
+    """Exclude providers outside the user-authorized RenderZ integration scope."""
     source = (entry.get("source") or "").lower()
     source_url = (entry.get("source_url") or "").lower()
     article_url = (entry.get("url") or "").lower()
-    restricted_markers = ("renderz", "fcmhub", "fc mobile forum", "fcmobileforum", "fcindex", "regista xi", "registaxi")
+    restricted_markers = ("fcmhub", "fc mobile forum", "fcmobileforum", "fcindex", "regista xi", "registaxi")
     combined = " ".join((source, source_url, article_url))
     return any(marker in combined for marker in restricted_markers)
 
