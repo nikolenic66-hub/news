@@ -71,11 +71,11 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(entries[0]["source"], "Example")
         self.assertEqual(entries[0]["source_url"], "https://example.com")
 
-    def test_renderz_is_excluded_until_permission(self):
-        self.assertTrue(monitor._is_disallowed_source({
+    def test_renderz_is_allowed_and_other_restricted_sources_stay_blocked(self):
+        self.assertFalse(monitor._is_disallowed_source({
             "source": "RenderZ", "source_url": "https://renderz.app/news"
         }))
-        self.assertTrue(monitor._is_disallowed_source({
+        self.assertFalse(monitor._is_disallowed_source({
             "source": "Google News", "url": "https://renderz.app/player/123"
         }))
         self.assertTrue(monitor._is_disallowed_source({
