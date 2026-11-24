@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from .config import BOT_TOKEN, AI_KEY, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY
+from .config import BOT_TOKEN, AI_KEY, AI_BASE_URL, AI_MODEL, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY
 from .storage import (
     init_db, add_message, history, get_memory, save_memory, get_settings,
     set_setting, user_count, clear_chat, mark_missed, get_missed,
@@ -292,8 +292,8 @@ async def main():
         log.error("APINEX_API_KEY is missing; AI replies are disabled")
     log.info(
         "AI config: provider=APInex base_url=%s model=%s key_configured=%s",
-        __import__("app.config", fromlist=["AI_BASE_URL"]).AI_BASE_URL,
-        __import__("app.config", fromlist=["AI_MODEL"]).AI_MODEL,
+        AI_BASE_URL,
+        AI_MODEL,
         bool(AI_KEY),
     )
     HTTP = httpx.AsyncClient(timeout=httpx.Timeout(45, connect=15))
