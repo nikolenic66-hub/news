@@ -283,10 +283,12 @@ async def handle_message(message):
         replied_author = replied_message.get("from") or {}
         reply_to_human = bool(replied_message) and not replied_author.get("is_bot")
         # A short human-to-human reply chain is not an invitation to interrupt.
-        # Images remain eligible, but only outside an explicit human reply chain.
+        # A captionless image inherits the topic only from the immediate
+        # recent chat context; this adds no extra model call.
+        topic_signal = text_in or " ".join(item["content"] for item in recent_history[-4:])
         eligible = has_image or is_fc_topic(text_in)
-        if not eligible or not is_fc_topic(text_in) or not should_spontaneously_reply(
-            text_in, chance, random.random(), elapsed,
+        if not eligible or not should_spontaneously_reply(
+            topic_signal, chance, random.random(), elapsed,
             previous_role=previous_role, reply_to_human=reply_to_human,
         ):
             return
