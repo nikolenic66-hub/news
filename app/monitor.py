@@ -3,6 +3,7 @@ import email.utils
 import html
 import logging
 import re
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -14,10 +15,12 @@ from .storage import (
     save_promo_code,
 )
 
-log = logging.getLogger("fc-mate.monitor")
+log = logging.getLogger("vasek.monitor")
 
 PROMO_CHECK_SECONDS = 8640  # 10 checks per day
-NEWS_CHECK_SECONDS = 3600  # once per hour
+NEWS_CHECK_SECONDS = 900  # refresh recent game news every 15 minutes
+ON_DEMAND_REFRESH_SECONDS = 300  # refresh once per 5 minutes when a player asks
+_last_on_demand_refresh = 0.0
 REQUEST_HEADERS = {
     "User-Agent": "FC-Mate/1.0 (+FC Mobile community news monitor)",
     "Accept": "text/html,application/rss+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -25,19 +28,29 @@ REQUEST_HEADERS = {
 
 NEWS_FEEDS = (
     (
-        "EA official news via Google News RSS",
-        "https://news.google.com/rss/search?q=site%3Aea.com%2Fgames%2Fea-sports-fc%2Ffc-mobile%2Fnews&hl=en-US&gl=US&ceid=US:en",
+        "EA official FC Mobile news",
+        "https://news.google.com/rss/search?q=site%3Aea.com%2Fgames%2Fea-sports-fc%2Ffc-mobile%2Fnews+when%3A7d&hl=en-US&gl=US&ceid=US:en",
         "official_news",
     ),
     (
-        "FC Mobile promo-code news",
-        "https://news.google.com/rss/search?q=FC+Mobile+redeem+code&hl=en-US&gl=US&ceid=US:en",
-        "promo_news",
+        "FC Mobile updates, events and rewards",
+        "https://news.google.com/rss/search?q=FC+Mobile+new+event+update+rewards+when%3A7d&hl=en-US&gl=US&ceid=US:en",
+        "events_updates",
     ),
     (
-        "FC Mobile cards and meta",
-        "https://news.google.com/rss/search?q=FC+Mobile+player+cards+RenderZ+meta&hl=en-US&gl=US&ceid=US:en",
+        "RenderZ FC Mobile cards and event guides",
+        "https://news.google.com/rss/search?q=site%3Arenderz.app%2Fnews+FC+Mobile+when%3A14d&hl=en-US&gl=US&ceid=US:en",
+        "cards_events",
+    ),
+    (
+        "FC Mobile cards, gameplay and meta",
+        "https://news.google.com/rss/search?q=FC+Mobile+player+cards+gameplay+meta+when%3A7d&hl=en-US&gl=US&ceid=US:en",
         "gameplay_news",
+    ),
+    (
+        "FC Mobile promo-code news",
+        "https://news.google.com/rss/search?q=FC+Mobile+redeem+code+when%3A2d&hl=en-US&gl=US&ceid=US:en",
+        "promo_news",
     ),
 )
 
@@ -182,7 +195,7 @@ async def check_promo_codes_once(client, send_alert):
 
 
 async def check_news_once(client):
-    """Collect recent FC Mobile news without running promo-code scans."""
+    """Collect current FC Mobile news without running promo-code scans."""
     for source_name, url, kind in NEWS_FEEDS:
         if kind == "promo_news":
             continue
@@ -237,29 +250,47 @@ async def monitor_loop(client, send_alert):
         await asyncio.sleep(max(1, min(next_promo, next_news) - loop.time()))
 
 
-async def build_intel_context(query):
+async def build_intel_context(query, client=None):
+    global _last_on_demand_refresh
     if not re.search(
         r"fc\s*mobile|фк\s*мобайл|промокод|\bкод\b|карточк|овр|состав|"
-        r"событи|обновлени|патч|тактик|мета|игрок",
+        r"событи|обновлени|патч|тактик|мета|игрок|награ|магазин|обмен",
         query or "",
         re.IGNORECASE,
     ):
         return ""
-    news = await get_recent_intel(8)
+    # Do not rely only on whatever happened to be in SQLite when the bot started.
+    # A direct game question triggers a fresh fetch, rate-limited process-wide.
+    now = time.monotonic()
+    if client is not None and now - _last_on_demand_refresh >= ON_DEMAND_REFRESH_SECONDS:
+        _last_on_demand_refresh = now
+        try:
+            await check_news_once(client)
+        except Exception:
+            log.exception("On-demand FC Mobile refresh failed")
+    news = await get_recent_intel(20)
     codes = await get_recent_promo_codes(8)
-    if not news and not codes:
-        return ""
+    current = datetime.now(timezone.utc)
+    fresh_news = []
+    for item in news:
+        published = _parse_date(item[5])
+        if published and -6 * 3600 <= (current - published).total_seconds() <= 14 * 24 * 3600:
+            fresh_news.append(item)
     lines = [
-        "Свежая справка из мониторинга FC Mobile. Это внешние публикации, а не гарантированно подтверждённые факты.",
-        "Проверяй даты и статус; не называй слух официальной информацией.",
+        "АКТУАЛЬНОСТЬ: текущая дата UTC " + current.strftime("%Y-%m-%d %H:%M") + ".",
+        "Ниже — свежие внешние публикации FC Mobile, собранные монитором прямо перед ответом или недавно. Используй их для вопросов о текущих событиях, обновлениях, карточках и мета.",
+        "У каждой публикации есть дата. Считай её старой, если она вне указанного периода. Не подменяй отсутствие свежих данных знаниями из FIFA Mobile 2023/2024.",
+        "Разделяй официальные публикации EA и материалы сообщества. Не выдавай прогнозы и слухи за подтверждённые факты.",
     ]
     if codes:
-        lines.append("Недавно замеченные промокоды (статус EA автоматически не проверяется):")
+        lines.append("Промокоды, замеченные недавно (валидность EA автоматически не проверяется):")
         for code, reward, source, url, first_seen in codes:
             lines.append(f"- {code}; источник: {source}; впервые замечен: {first_seen}; {url}")
-    if news:
-        lines.append("Последние публикации:")
-        for kind, title, summary, url, source, published in news:
+    if fresh_news:
+        lines.append("СВЕЖИЕ ПУБЛИКАЦИИ:")
+        for kind, title, summary, url, source, published in fresh_news:
             detail = (summary or "").strip()
-            lines.append(f"- [{kind}] {title} ({source}; {published or 'дата не указана'}). {detail[:350]} Ссылка: {url}")
-    return "\n".join(lines)[:6500]
+            lines.append(f"- [{kind}] {title} ({source}; дата публикации: {published}). {detail[:500]} Ссылка: {url}")
+    else:
+        lines.append("СВЕЖИХ ПУБЛИКАЦИЙ НЕ НАЙДЕНО. Не называй старые сведения актуальными; честно скажи, что свежий факт сейчас подтвердить не удалось.")
+    return "\n".join(lines)[:9000]
