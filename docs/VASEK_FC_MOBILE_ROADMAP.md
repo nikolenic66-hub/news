@@ -498,3 +498,6 @@ Implemented in `app/renderz.py`:
 Tests added for exact-token matching, multi-word names, accented names, OVR-only rejection, transliteration and English query detection.
 
 **Limitations:** this improves matching against the visible cards returned by RenderZ; it does not create a complete local card database or guarantee that RenderZ's public page returns every matching card. Multiple-card comparison and structured squad analysis remain separate future stages.
+
+- Search the public player-list pagination (up to 8 pages) instead of relying on unverified `search=`/`q=` URL parameters or only the first page.
+- Preserve connectors in two-player requests and search each requested name independently; explicitly tell the model when not all requested players were found.
