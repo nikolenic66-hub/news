@@ -30,6 +30,13 @@ class PersistentActivityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(top[0][0], 42)
         self.assertEqual(top[0][3], 9)
         self.assertLessEqual(len(await storage.history(-100)), 3)
+        import aiosqlite
+        async with aiosqlite.connect(storage.DB_PATH) as db:
+            rows = await (await db.execute("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
+        tables = {row[0] for row in rows}
+        self.assertNotIn("tournaments", tables)
+        self.assertNotIn("tournament_entries", tables)
+        self.assertNotIn("tournament_missed", tables)
 
     async def test_clear_chat_resets_activity(self):
         await storage.add_message(-100, 7, "p", "Игрок", "user", "Привет")
