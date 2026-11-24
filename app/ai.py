@@ -5,7 +5,7 @@ from .persona import SYSTEM_PROMPT
 class ProviderError(RuntimeError): pass
 
 async def _completion(messages,temperature=0.8,max_tokens=450):
-    if not AI_KEY: raise ProviderError("AI_API_KEY не настроен")
+    if not AI_KEY: raise ProviderError("APINEX_API_KEY не настроен")
     if not AI_MODEL: raise ProviderError("AI_MODEL пуст")
     payload={"model":AI_MODEL,"messages":messages,"temperature":temperature,"max_tokens":max_tokens}
     try:
