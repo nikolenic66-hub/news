@@ -1,6 +1,6 @@
 import re
 
-BOT_NAME_CALL = re.compile(r"(?i)(?<![\\w])(?:вас[её]к|васек|вась|васька)(?![\\w])")
+BOT_NAME_CALL = re.compile(r"(?i)(?<![\w])(?:вас[её]к|васек|вась|васька)(?![\w])")
 
 def is_bot_name_call(text:str)->bool:
  return bool(BOT_NAME_CALL.search(text or ""))
