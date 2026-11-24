@@ -217,11 +217,16 @@ def is_verified_player_context(context: str) -> bool:
 def is_player_data_question(message: str) -> bool:
     text = (message or "").casefold()
     intent = re.search(
-        r"(овр|\bovr\b|карточ|игрок|стат[ыи]|характеристик|ранг|прокач|трениров|цена|стоимост|сравни|лучше|месси|роналд|холанд|мбаппе|беллингем|винисиус)",
+        r"(овр|\bovr\b|карточ|игрок|стат[ыи]|характеристик|ранг|прокач|трениров|цена|стоимост|сравни|лучше|"
+        r"месси|роналд|холанд|мбаппе|беллингем|винисиус|салах|кейн|ямал|неймар|эссьен|руни|фердинанд|"
+        r"\bmessi\b|\bronald[o]?\b|\bhaaland\b|\bmbappe\b|\bbellingham\b|"
+        r"\bvinicius\b|\bsalah\b|\bkane\b|\byamal\b|\bneymar\b|"
+        r"\bde bruyne\b|\brodri\b|\bvan dijk\b|\bessien\b|\brooney\b|"
+        r"\bferdinand\b|\bkaka\b|\beto'o\b|\bribery\b|\blahm\b|\bgarrincha\b)",
         text,
     )
-    return bool(intent)
-
+    has_card_rating = bool(re.search(r"\b(?:9[0-9]|1[0-3][0-9])\b", text))
+    return bool(intent or has_card_rating)
 
 async def _get_page(client, url: str) -> str:
     response = await client.get(
