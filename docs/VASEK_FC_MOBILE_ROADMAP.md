@@ -475,3 +475,8 @@ RSS-заголовок или сниппет не всегда содержит 
 **Васёк = живой собеседник + проверяемые свежие данные FC Mobile + точная база карточек + анализ состава + честный системный промпт.**
 
 Главное правило: лучше коротко признать, что свежих данных нет, чем уверенно придумать ответ.
+
+
+## 13. Group-agent behavior upgrade (2026-11-24)
+
+See [AGENT_BEHAVIOR_REWORK.md](AGENT_BEHAVIOR_REWORK.md) for the reviewed open-source architectures, implemented behavior changes, privacy decisions, and intentionally deferred components. The upgrade adapts ideas from Vusan, ThinkMate, and Groknul without importing their runtime stacks or copying implementation code. Existing FC Mobile freshness/source rules, no-tournament constraint, no-paid-API constraint, and current deployment architecture remain unchanged.
