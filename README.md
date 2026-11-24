@@ -35,7 +35,13 @@ Build from this repository using Dockerfile. Set the environment variables below
 - Admins: `/on`, `/off`, `/activity 0-50`, `/persona your style`, `/memory`, `/forget`, `/clear`
 - Mention bot or reply to its message for a direct answer.
 
-## Васёк features\n\n- Telegram photo and image-document analysis through Groq Vision. Reply to a photo or mention the bot in its caption to request analysis; in groups, unaddressed images follow the configured low-noise activity chance. Images larger than 20 MB are rejected.\n- `/stats` and `/top` show message activity for the current chat.\n- `/tournament title`, `/join`, `/participants`, `/finish` provide simple registration management; only group admins can open/close registration.\n- `/poll question | option 1 | option 2` creates a Telegram poll; only group admins can create polls.\n\n## Memory and privacy
+## Возможности Васька
+
+- Анализ фотографий и скриншотов FC Mobile через Groq Vision: составы, карточки, OVR, позиции, задания и события. Для точного разбора в группе ответь на изображение или упомяни Васька в подписи.
+- `/stats` и `/top` показывают накопительную статистику сообщений. Счётчики хранятся отдельно от короткой истории переписки и не обнуляются при её очистке для контекста.
+- `/poll вопрос | вариант 1 | вариант 2` создаёт опрос Telegram; доступен администраторам группы.
+
+## Memory and privacy
 Stores recent group messages for context, cumulative activity counters, usernames, a short group memory and settings. Long-term summaries are limited to game-related preferences, recurring jokes and group context; sensitive information is excluded by prompt. `/forget` removes long-term summary, `/clear` removes stored messages, summary, participant list and activity counters. SQLite data persists only if Amvera storage is configured to persist the DB file. Do not put API secrets into GitHub.
 
 
