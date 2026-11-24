@@ -5,6 +5,8 @@ import logging
 import re
 import time
 import xml.etree.ElementTree as ET
+
+import httpx
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, quote_plus, urlparse
