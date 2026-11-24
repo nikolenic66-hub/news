@@ -79,6 +79,7 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
         fresh = ("events_updates", "FC Mobile Rivals event guide", "New event rewards", "https://example.com/fresh", "Example", fresh_date)
         stale = ("official_news", "Old FIFA Mobile 2024 update", "Old data", "https://example.com/old", "Example", stale_date)
 
+        with patch.object(monitor.time, "monotonic", return_value=10000), \
         with patch.object(monitor, "_last_on_demand_refresh", 0), \
              patch.object(monitor, "_last_question_refresh", 0), \
              patch.object(monitor, "check_news_once", new=AsyncMock()) as general_refresh, \
