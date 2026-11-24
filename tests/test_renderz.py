@@ -92,6 +92,8 @@ class RenderZParsingTests(unittest.TestCase):
 
     def test_query_extraction_and_question_detection(self):
         self.assertEqual(_extract_search_query("Какой OVR у Месси?"), "Месси")
+        self.assertEqual(_extract_search_query("Сравни Месси и Роналду"), "Месси и Роналду")
+        self.assertEqual(_extract_search_query("Compare Messi vs Ronaldo"), "Messi vs Ronaldo")
         self.assertTrue(is_player_data_question("Сколько OVR у Haaland?"))
         self.assertTrue(is_player_data_question("Messi 115"))
         self.assertTrue(is_player_data_question("Salah stats"))
