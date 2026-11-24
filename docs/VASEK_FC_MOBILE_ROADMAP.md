@@ -530,4 +530,4 @@ Tests added for exact-token matching, multi-word names, accented names, OVR-only
 - **Problem:** prompt context selected promo codes by first-discovery time within 30 days, even when the code had not appeared in any recent publication.
 - **Change:** recent-code context now selects by last-seen time within 48 hours and labels entries as recently mentioned, not verified active.
 - **Safety:** this does not prove a code still works; the bot must not call it active without EA verification. No schema migration or new service was added.
-- **Verification:** regression test covers an old code mentioned again recently and a code whose last mention was three days old. CI result pending.
+- **Verification:** regression test covers an old code mentioned again recently and a code whose last mention was three days old. GitHub Actions passed (`compileall` + full `unittest` suite) for code/test commit `8853c3500938d7a30695e404d617ac54f49183c`; Amvera/Telegram behavior remains unverified.
