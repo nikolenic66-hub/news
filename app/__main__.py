@@ -10,11 +10,8 @@ import httpx
 from .config import BOT_TOKEN, GROQ_API_KEY, GROQ_API_URL, GROQ_MODEL, GROQ_VISION_MODEL, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY
 from .storage import (
     init_db, add_message, history, get_memory, save_memory, get_settings,
-    set_setting, user_count, clear_chat, mark_missed, get_missed,
-    find_user, remove_missed, update_reminder, get_missed_chats,
-    get_enabled_group_chats, get_user_stats, get_top_users,
-    create_tournament, get_open_tournament, join_tournament,
-    tournament_participants, close_tournament,
+    set_setting, user_count, clear_chat, get_enabled_group_chats,
+    get_user_stats, get_top_users,
 )
 from .logic import is_fc_topic, is_direct_message, should_spontaneously_reply
 from .ai import reply, summarize, ProviderError
@@ -28,7 +25,7 @@ logging.basicConfig(
 # request URLs, otherwise the token is exposed in Amvera application logs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-log = logging.getLogger("fc-mate")
+log = logging.getLogger("vasek")
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 HTTP = None
 BOT_ID = None
@@ -36,8 +33,6 @@ BOT_USERNAME = None
 last_spontaneous = {}
 last_direct = {}
 summary_counter = {}
-TOURNAMENT_COOLDOWN = 45 * 60
-
 
 class TelegramAPIError(RuntimeError):
     pass
@@ -118,7 +113,7 @@ async def handle_command(message, command, args):
 
     group_admin_commands = {
         "on", "off", "activity", "persona", "memory", "forget", "clear",
-        "missed", "missedlist", "played", "tournament", "finish", "poll",
+        "poll",
     }
     if message.get("chat", {}).get("type") == "private" and command in group_admin_commands:
         await send(
@@ -131,38 +126,7 @@ async def handle_command(message, command, args):
     if command == "start":
         await send(chat_id, f"Я {BOT_NAME} — ИИ-игрок в чате FC Mobile. Обсуждаю карточки, составы и тактики, могу пошутить и иногда сам вклиниться в тему.\n/help", message.get("message_id"))
     elif command == "help":
-        await send(chat_id, "/status — настройки чата\n/on, /off — включить или выключить меня (админы)\n/activity 0-50 — шанс моей инициативы (админы)\n/persona текст — мой характер (админы)\n/memory — долговременная память (админы)\n/forget — очистить только память (админы)\n/clear — очистить историю и память (админы)\n/missed — отметить прогульщика ответом\n/missed @username турнир — добавить в список\n/missedlist — список прогульщиков\n/played — снять с списка ответом или @username\n/stats — твоя статистика в чате\n/top — рейтинг активности\n/tournament название — открыть регистрацию (админ)\n/join — записаться в турнир\n/participants — список участников\n/finish — закрыть регистрацию (админ)\n/poll вопрос | вариант 1 | вариант 2 — опрос (админ)\n\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
-    elif command == "missed":
-        if not await is_admin(message):
-            await send(chat_id, "Турнирный список меняют администраторы.", message.get("message_id")); return
-        tournament = args or "текущий турнир"
-        if target is None and args.startswith("@"):
-            parts = args.split(maxsplit=1)
-            row = await find_user(chat_id, parts[0][1:])
-            if row:
-                tournament = parts[1] if len(parts) > 1 else "текущий турнир"
-                await mark_missed(chat_id, row[0], row[1], row[2], tournament)
-                await send(chat_id, f"Добавил {row[2]} в список прогульщиков турнира «{tournament}». Буду припоминать 😈", message.get("message_id")); return
-        if not target:
-            await send(chat_id, "Ответь на сообщение игрока: /missed название турнира, или /missed @username название турнира.", message.get("message_id")); return
-        await mark_missed(chat_id, target["id"], target.get("username"), user_name(target), tournament)
-        await send(chat_id, f"Записал {user_name(target)} как не сыгравшего «{tournament}». Буду периодически подкалывать и напоминать.", message.get("message_id"))
-    elif command == "missedlist":
-        if not await is_admin(message):
-            await send(chat_id, "Только администраторы.", message.get("message_id")); return
-        rows = await get_missed(chat_id)
-        await send(chat_id, "Список прогульщиков:\n" + "\n".join(f"• {name} — «{tour}»" for _, _, name, tour, _ in rows) if rows else "Список прогульщиков пуст.", message.get("message_id"))
-    elif command == "played":
-        if not await is_admin(message):
-            await send(chat_id, "Только администраторы.", message.get("message_id")); return
-        if target is None and args.startswith("@"):
-            row = await find_user(chat_id, args.split()[0][1:])
-            if row:
-                target = {"id": row[0], "first_name": row[2]}
-        if not target:
-            await send(chat_id, "Ответь на сообщение игрока /played или напиши /played @username.", message.get("message_id")); return
-        removed = await remove_missed(chat_id, target["id"])
-        await send(chat_id, "Снял с списка прогульщиков. Турнир сыгран! 🏆" if removed else "Его не было в списке.", message.get("message_id"))
+        await send(chat_id, "/status — настройки чата\n/on, /off — включить или выключить меня (админы)\n/activity 0-50 — шанс моей инициативы (админы)\n/persona текст — мой характер (админы)\n/memory — долговременная память (админы)\n/forget — очистить только память (админы)\n/clear — очистить историю и память (админы)\n/stats — твоя статистика в чате\n/top — рейтинг активности\n/poll вопрос | вариант 1 | вариант 2 — опрос (админ)\n\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
     elif command == "stats":
         stats = await get_user_stats(chat_id, user.get("id"))
         await send(chat_id, f"Твоя статистика в этом чате: сообщений — {stats['messages']}. Последняя активность: {stats['last_seen'] or 'пока нет данных'}.", message.get("message_id"))
@@ -172,38 +136,6 @@ async def handle_command(message, command, args):
             answer = "Пока статистики нет."
         else:
             answer = "🏆 Актив чата по сообщениям:\n" + "\n".join(f"{i}. {row[1] or 'Игрок'} — {row[3]}" for i, row in enumerate(rows, 1))
-        await send(chat_id, answer, message.get("message_id"))
-    elif command == "tournament":
-        if not await is_admin(message):
-            await send(chat_id, "Открыть регистрацию может администратор.", message.get("message_id")); return
-        if not args:
-            await send(chat_id, "Напиши название: /tournament Кубок выходного дня", message.get("message_id")); return
-        tid = await create_tournament(chat_id, args)
-        await send(chat_id, f"🏆 Открыл регистрацию на «{args}»! Участие: /join. Список: /participants. Закрыть: /finish.", message.get("message_id"))
-    elif command == "join":
-        active = await get_open_tournament(chat_id)
-        if not active:
-            await send(chat_id, "Сейчас нет открытой регистрации.", message.get("message_id")); return
-        added = await join_tournament(active[0], user["id"], user_name(user), user.get("username"))
-        await send(chat_id, "Записал тебя на «" + active[1] + "»! ⚽" if added else "Ты уже в списке участников.", message.get("message_id"))
-    elif command == "participants":
-        active = await get_open_tournament(chat_id)
-        if not active:
-            await send(chat_id, "Нет открытого турнира.", message.get("message_id")); return
-        rows = await tournament_participants(active[0])
-        answer = "Участники «" + active[1] + "»:\n" + ("\n".join(f"{i}. {row[0]}" for i, row in enumerate(rows, 1)) if rows else "Пока никто не записался.")
-        await send(chat_id, answer, message.get("message_id"))
-    elif command == "finish":
-        if not await is_admin(message):
-            await send(chat_id, "Закрыть регистрацию может администратор.", message.get("message_id")); return
-        active = await get_open_tournament(chat_id)
-        if not active:
-            await send(chat_id, "Нет открытого турнира.", message.get("message_id")); return
-        await close_tournament(active[0])
-        rows = await tournament_participants(active[0])
-        answer = f"Регистрация на «{active[1]}» закрыта. Участников: {len(rows)}."
-        if rows:
-            answer += "\n" + "\n".join(f"{i}. {row[0]}" for i, row in enumerate(rows, 1))
         await send(chat_id, answer, message.get("message_id"))
     elif command == "poll":
         if not await is_admin(message):
@@ -215,7 +147,7 @@ async def handle_command(message, command, args):
     elif command == "status":
         settings = await get_settings(chat_id)
         chance = REPLY_PROBABILITY if settings["activity"] is None else settings["activity"]
-        await send(chat_id, f"FC Mate: {'активен' if settings['enabled'] else 'выключен'}\nИнициатива: {chance*100:.0f}%\nЗапомненных участников: {await user_count(chat_id)}\nПрогульщиков турнира: {len(await get_missed(chat_id))}", message.get("message_id"))
+        await send(chat_id, f"FC Mate: {'активен' if settings['enabled'] else 'выключен'}\nИнициатива: {chance*100:.0f}%\nЗапомненных участников: {await user_count(chat_id)}", message.get("message_id"))
     elif command in ("on", "off"):
         if not await is_admin(message):
             await send(chat_id, "Только администраторы группы.", message.get("message_id")); return
@@ -384,29 +316,6 @@ async def handle_message(message):
             await send(chat_id, "У меня техническая заминка, попробуй ещё раз.", message.get("message_id"))
 
 
-async def tournament_reminder_loop():
-    while True:
-        await asyncio.sleep(15 * 60)
-        now = time.time()
-        try:
-            chats = await get_missed_chats()
-        except Exception:
-            log.exception("Could not load tournament reminder chats")
-            continue
-        for chat_id in chats:
-            try:
-                due = [row for row in await get_missed(chat_id) if now - row[4] >= TOURNAMENT_COOLDOWN]
-                if not due:
-                    continue
-                uid, username, display, tournament, _ = due[0]
-                mention = f"@{username}" if username else display
-                roast = f"{mention}, опять пропустил «{tournament}»? 😤 Турнир не пройдёт сам, даже если ты очень талантливо игнорируешь сетку. Залетай и закрывай долг!"
-                await send(chat_id, roast)
-                await update_reminder(chat_id, uid, now)
-            except Exception:
-                log.exception("Tournament reminder failed for chat %s", chat_id)
-
-
 async def main():
     global HTTP, BOT_ID, BOT_USERNAME
     if not BOT_TOKEN:
@@ -427,10 +336,9 @@ async def main():
         BOT_ID, BOT_USERNAME = me["id"], me.get("username")
         log.info("Telegram API connected as @%s (id=%s)", BOT_USERNAME, BOT_ID)
         await telegram("deleteWebhook", drop_pending_updates=False)
-        asyncio.create_task(tournament_reminder_loop())
         asyncio.create_task(monitor_loop(HTTP, broadcast_promo_alert))
         offset = None
-        log.info("FC Mate started; polling updates")
+        log.info("Васёк started; polling updates")
         while True:
             try:
                 params = {"timeout": 30, "allowed_updates": ["message"]}
