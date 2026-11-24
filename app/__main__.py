@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from .config import BOT_TOKEN, AI_KEY, AI_BASE_URL, AI_MODEL, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY
+from .config import BOT_TOKEN, APINEX_API_KEY, APINEX_API_URL, APINEX_MODEL, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY
 from .storage import (
     init_db, add_message, history, get_memory, save_memory, get_settings,
     set_setting, user_count, clear_chat, mark_missed, get_missed,
@@ -288,12 +288,12 @@ async def main():
     global HTTP, BOT_ID, BOT_USERNAME
     if not BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
-    if not AI_KEY:
+    if not APINEX_API_KEY:
         log.error("APINEX_API_KEY is missing; AI replies are disabled")
     log.info(
         "AI config: provider=APInex base_url=%s model=%s key_configured=%s",
-        AI_BASE_URL,
-        AI_MODEL,
+        APINEX_API_URL,
+        APINEX_MODEL,
         bool(AI_KEY),
     )
     HTTP = httpx.AsyncClient(timeout=httpx.Timeout(45, connect=15))
