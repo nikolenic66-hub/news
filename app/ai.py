@@ -54,13 +54,34 @@ async def reply(messages, persona, image_data=None, image_mime='image/jpeg'):
     request_messages = [{"role": "system", "content": system}, *messages]
     model = GROQ_MODEL
     if image_data:
-        request_messages.append({
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "Внимательно рассмотри изображение. Если это FC Mobile — распознай видимые данные, карточки, OVR, позиции, состав, счёт, задания или событие. Не выдумывай нечитаемые значения; прямо отмечай сомнительные места. Ответь на подпись/вопрос пользователя."},
-                {"type": "image_url", "image_url": {"url": "data:" + image_mime + ";base64," + image_data}},
-            ],
-        })
+        # Attach the image to the actual latest user turn. Sending it as a
+        # separate trailing turn disconnects it from the user's caption/question.
+        image_text = (
+            "Разбери именно прикреплённый скриншот FC Mobile и ответь на текст этого сообщения. "
+            "Если спрашивают OVR, найди цифры именно в поле OVR нужной карточки игрока. "
+            "Не подменяй OVR карточки общим OVR состава, рейтингом команды, рангом или другим числом. "
+            "Сначала визуально проверь сами цифры. Называй OVR только если все цифры отчётливо видны. "
+            "Если цифры мелкие, размыты, закрыты или ты не уверен хотя бы в одной цифре — НЕ угадывай, "
+            "не пиши типовое значение вроде 90; прямо скажи, что OVR на этом изображении не удаётся надёжно прочитать, "
+            "и попроси крупный фрагмент карточки. Не выводи OVR из силы состава, позиции, имени игрока или памяти. "
+            "Для других данных тоже используй только то, что реально видно."
+        )
+        image_part = {"type": "image_url", "image_url": {"url": "data:" + image_mime + ";base64," + image_data}}
+        attached = False
+        if request_messages and request_messages[-1].get("role") == "user":
+            latest = request_messages[-1]
+            previous_text = latest.get("content", "")
+            if isinstance(previous_text, str):
+                latest["content"] = [
+                    {"type": "text", "text": image_text + "\\nТекст сообщения игрока: " + previous_text},
+                    image_part,
+                ]
+                attached = True
+        if not attached:
+            request_messages.append({
+                "role": "user",
+                "content": [{"type": "text", "text": image_text}, image_part],
+            })
         model = GROQ_VISION_MODEL
     answer = await _completion(
         request_messages,
