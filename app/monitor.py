@@ -16,7 +16,8 @@ from .storage import (
 
 log = logging.getLogger("fc-mate.monitor")
 
-POLL_SECONDS = 300
+PROMO_CHECK_SECONDS = 8640  # 10 checks per day
+NEWS_CHECK_SECONDS = 3600  # once per hour
 REQUEST_HEADERS = {
     "User-Agent": "FC-Mate/1.0 (+FC Mobile community news monitor)",
     "Accept": "text/html,application/rss+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -150,28 +151,30 @@ async def _get_text(client, url):
     return response.text
 
 
-async def monitor_once(client, send_alert):
-    """Poll sources once. Alerts are sent only for codes not seen in the database."""
+async def check_promo_codes_once(client, send_alert):
+    """Check community promo-code lists; notify only for newly discovered codes."""
     new_codes = 0
     for source, url in CODE_PAGES:
         try:
             page = await _get_text(client, url)
-            codes = extract_active_codes(page)
-            for code in codes:
+            for code in extract_active_codes(page):
                 inserted = await save_promo_code(code, source, url)
                 if inserted:
                     new_codes += 1
-                    alert = (
-                        "🚨 Новый код FC Mobile: " + code + "\n"
-                        "Источник: " + source + "\n"
-                        "Проверяй и активируй сразу: https://redeem.fcm.ea.com/\n"
+                    await send_alert(
+                        "🚨 Новый код FC Mobile: " + code + "\\n"
+                        "Источник: " + source + "\\n"
+                        "Проверяй и активируй сразу: https://redeem.fcm.ea.com/\\n"
                         "Важно: код найден в активном списке сообщества; EA не подтверждает его статус автоматически. "
                         "Коды могут быстро истечь или закончиться."
                     )
-                    await send_alert(alert)
         except Exception:
             log.exception("Promo-code source failed: %s", source)
+    return new_codes
 
+
+async def check_news_once(client):
+    """Collect recent FC Mobile news without running promo-code scans."""
     for source_name, url, kind in NEWS_FEEDS:
         try:
             feed = await _get_text(client, url)
@@ -191,32 +194,37 @@ async def monitor_once(client, send_alert):
                     entry["source"] or source_name,
                     entry["published"],
                 )
-                for code in _codes_from_recent_article(entry):
-                    inserted = await save_promo_code(code, source_name, entry["url"])
-                    if inserted:
-                        new_codes += 1
-                        await send_alert(
-                            "🚨 Похоже, появился новый промокод FC Mobile: " + code + "\n"
-                            "Нашёл публикацию: " + entry["title"][:250] + "\n"
-                            "Источник: " + entry["url"] + "\n"
-                            "Проверь и активируй: https://redeem.fcm.ea.com/\n"
-                            "Статус пока не подтверждён EA."
-                        )
         except Exception:
             log.exception("News feed failed: %s", source_name)
-    return new_codes
 
 
 async def monitor_loop(client, send_alert):
-    log.info("FC Mobile monitor started; polling every %s seconds", POLL_SECONDS)
+    log.info(
+        "FC Mobile monitor started; promo codes every %s seconds (10/day), news every %s seconds",
+        PROMO_CHECK_SECONDS,
+        NEWS_CHECK_SECONDS,
+    )
+    next_promo = 0.0
+    next_news = 0.0
+    loop = asyncio.get_running_loop()
     while True:
-        try:
-            count = await monitor_once(client, send_alert)
-            if count:
-                log.info("FC Mobile monitor discovered %s new promo code(s)", count)
-        except Exception:
-            log.exception("FC Mobile monitor cycle failed")
-        await asyncio.sleep(POLL_SECONDS)
+        now = loop.time()
+        if now >= next_promo:
+            try:
+                count = await check_promo_codes_once(client, send_alert)
+                if count:
+                    log.info("FC Mobile monitor discovered %s new promo code(s)", count)
+            except Exception:
+                log.exception("Promo-code monitor cycle failed")
+            next_promo = loop.time() + PROMO_CHECK_SECONDS
+        now = loop.time()
+        if now >= next_news:
+            try:
+                await check_news_once(client)
+            except Exception:
+                log.exception("FC Mobile news monitor cycle failed")
+            next_news = loop.time() + NEWS_CHECK_SECONDS
+        await asyncio.sleep(max(1, min(next_promo, next_news) - loop.time()))
 
 
 async def build_intel_context(query):
