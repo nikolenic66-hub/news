@@ -9,7 +9,7 @@ from app import monitor
 from app.monitor import extract_active_codes, parse_rss, _codes_from_recent_article
 
 
-class MonitorParsingTests(unittest.TestCase):
+class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
     def test_extracts_only_active_codes(self):
         page = """
         <h2>Active Codes</h2>
