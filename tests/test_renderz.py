@@ -23,7 +23,7 @@ class RenderZParsingTests(unittest.TestCase):
         self.assertEqual(cards[0]["ovr"], 124)
         self.assertEqual(cards[0]["position"], "CDM")
         self.assertEqual(cards[0]["PAC"], 147)
-        self.assertEqual(cards[0]["PHY"], 151)
+        self.assertEqual(cards[0]["PHY"], 151)\n        self.assertEqual(cards[0]["market_price"], "13.3B")
         self.assertEqual(cards[0]["url"], "https://renderz.app/player/30924202-essien")
 
     def test_search_rejects_unmatched_page_rows(self):
@@ -44,6 +44,9 @@ class RenderZParsingTests(unittest.TestCase):
         <div>NATION/REGION Ghana</div>
         <div>Height 5'10" (177 cm) Weight 80 kg</div>
         <div>Work Rate (ATT) / Work Rate (DEF) Medium/High</div>
+        <div>Like Dislike Stellar Icons Player</div>
+        <div>Skill Moves (3) ★★★</div>
+        <div>STRONG FOOT / WEAK FOOT RIGHT / (4) ★★★★</div>
         <div>Relentless Level 1 Anticipate Level 2</div>
         <div>Added on 11/18/2026</div>
         """
@@ -54,6 +57,9 @@ class RenderZParsingTests(unittest.TestCase):
         self.assertEqual(data["weight"], "80 kg")
         self.assertEqual(data["work_rate"], "Medium/High")
         self.assertIn("Relentless", data["playstyles"])
+        self.assertEqual(data["program"], "Stellar Icons")
+        self.assertEqual(data["skill_moves"], "3")
+        self.assertEqual(data["strong_foot"], "RIGHT / weak 4")
 
     def test_query_extraction_and_question_detection(self):
         self.assertEqual(_extract_search_query("Какой OVR у Месси?"), "Месси")
