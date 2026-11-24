@@ -6,6 +6,7 @@ from app.renderz import (
     _format_card,
     _player_links,
     is_player_data_question,
+    is_verified_player_context,
 )
 
 
@@ -66,6 +67,18 @@ class RenderZParsingTests(unittest.TestCase):
         self.assertEqual(_extract_search_query("Какой OVR у Месси?"), "Месси")
         self.assertTrue(is_player_data_question("Сколько OVR у Haaland?"))
         self.assertFalse(is_player_data_question("Кто выиграл матч вчера?"))
+
+    def test_player_context_verification_requires_parsed_card_marker(self):
+        self.assertTrue(is_verified_player_context(
+            "ПРОВЕРЕННЫЕ ДАННЫЕ КАРТОЧЕК RENDERZ (время получения — 2026-11-24 UTC)"
+        ))
+        self.assertFalse(is_verified_player_context(
+            "ДАННЫЕ RENDERZ: по запросу «Messi» карточка не найдена"
+        ))
+        self.assertFalse(is_verified_player_context(""))
+        self.assertFalse(is_verified_player_context(
+            "RenderZ вернул ошибку, вот примерная карточка"
+        ))
 
     def test_format_does_not_invent_missing_fields(self):
         card = {"label": "124 CDM Essien", "ovr": 124, "position": "CDM",
