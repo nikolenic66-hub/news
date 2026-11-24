@@ -169,10 +169,10 @@ async def check_promo_codes_once(client, send_alert):
                     if inserted:
                         new_codes += 1
                         await send_alert(
-                            "🚨 Возможный новый промокод FC Mobile: " + code + "\\n"
-                            "Дата публикации: " + (entry.get("published") or "не указана") + "\\n"
-                            "Публикация: " + entry["title"][:250] + "\\n"
-                            "Источник: " + entry["url"] + "\\n"
+                            "🚨 Возможный новый промокод FC Mobile: " + code + "\n"
+                            "Дата публикации: " + (entry.get("published") or "не указана") + "\n"
+                            "Публикация: " + entry["title"][:250] + "\n"
+                            "Источник: " + entry["url"] + "\n"
                             "Активировать: https://redeem.fcm.ea.com/\\n"
                             "Код найден в свежей публикации за последние 48 часов; действительность проверь на странице EA."
                         )
