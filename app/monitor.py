@@ -144,7 +144,7 @@ def _is_disallowed_source(entry):
     source = (entry.get("source") or "").lower()
     source_url = (entry.get("source_url") or "").lower()
     article_url = (entry.get("url") or "").lower()
-    restricted_markers = ("renderz", "fcmhub", "fc mobile forum", "fcmobileforum", "fcindex")
+    restricted_markers = ("renderz", "fcmhub", "fc mobile forum", "fcmobileforum", "fcindex", "regista xi", "registaxi")
     combined = " ".join((source, source_url, article_url))
     return any(marker in combined for marker in restricted_markers)
 
