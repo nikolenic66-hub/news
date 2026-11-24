@@ -12,15 +12,24 @@ async def init_db():
   CREATE TABLE IF NOT EXISTS group_memory(chat_id INTEGER PRIMARY KEY,memory TEXT NOT NULL DEFAULT '');
   CREATE TABLE IF NOT EXISTS settings(chat_id INTEGER PRIMARY KEY,enabled INTEGER NOT NULL DEFAULT 1,activity REAL DEFAULT NULL,persona TEXT NOT NULL DEFAULT '');
   CREATE TABLE IF NOT EXISTS users(chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,display_name TEXT,username TEXT,last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(chat_id,user_id));
-  CREATE TABLE IF NOT EXISTS tournament_missed(chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,username TEXT,display_name TEXT,tournament TEXT NOT NULL,last_reminder REAL NOT NULL DEFAULT 0,PRIMARY KEY(chat_id,user_id));
   CREATE TABLE IF NOT EXISTS intel_items(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,item_key TEXT NOT NULL UNIQUE,title TEXT NOT NULL,summary TEXT NOT NULL DEFAULT '',url TEXT NOT NULL,source TEXT NOT NULL,published_at TEXT NOT NULL DEFAULT '',fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
   CREATE INDEX IF NOT EXISTS idx_intel_fetched_at ON intel_items(fetched_at);
   CREATE TABLE IF NOT EXISTS promo_codes(code TEXT PRIMARY KEY,reward TEXT NOT NULL DEFAULT '',source TEXT NOT NULL,source_url TEXT NOT NULL,first_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
-  CREATE TABLE IF NOT EXISTS tournaments(id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id INTEGER NOT NULL,title TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-  CREATE TABLE IF NOT EXISTS tournament_entries(tournament_id INTEGER NOT NULL,user_id INTEGER NOT NULL,display_name TEXT NOT NULL,username TEXT,joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(tournament_id,user_id));
+  CREATE TABLE IF NOT EXISTS user_activity(chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,message_count INTEGER NOT NULL DEFAULT 0,last_seen DATETIME,display_name TEXT,username TEXT,PRIMARY KEY(chat_id,user_id));
+  CREATE TABLE IF NOT EXISTS app_migrations(version INTEGER PRIMARY KEY);
   """)
   columns=await (await db.execute("PRAGMA table_info(settings)")).fetchall()
   if columns and not any(row[1]=="activity" for row in columns):await db.execute("ALTER TABLE settings ADD COLUMN activity REAL DEFAULT NULL")
+  # Backfill the activity counter once from messages retained by the old history table.
+  migrated=await (await db.execute("SELECT 1 FROM app_migrations WHERE version=1")).fetchone()
+  if not migrated:
+   await db.execute("""INSERT OR IGNORE INTO user_activity(chat_id,user_id,message_count,last_seen,display_name,username)
+   SELECT chat_id,user_id,COUNT(*),MAX(created_at),MAX(display_name),MAX(username)
+   FROM messages WHERE role='user' AND user_id IS NOT NULL GROUP BY chat_id,user_id""")
+   await db.execute("INSERT INTO app_migrations(version) VALUES(1)")
+  await db.execute("DROP TABLE IF EXISTS tournament_entries")
+  await db.execute("DROP TABLE IF EXISTS tournaments")
+  await db.execute("DROP TABLE IF EXISTS tournament_missed")
   await db.commit()
 async def add_message(chat_id,user_id,username,display_name,role,content):
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
@@ -29,6 +38,10 @@ async def add_message(chat_id,user_id,username,display_name,role,content):
   await db.execute("DELETE FROM messages WHERE chat_id=? AND id NOT IN (SELECT id FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT ?)",(chat_id,chat_id,MAX_HISTORY*3))
   if user_id is not None:
    await db.execute("""INSERT INTO users(chat_id,user_id,display_name,username) VALUES(?,?,?,?) ON CONFLICT(chat_id,user_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,last_seen=CURRENT_TIMESTAMP""",(chat_id,user_id,display_name,username))
+   if role == "user":
+    await db.execute("""INSERT INTO user_activity(chat_id,user_id,message_count,last_seen,display_name,username)
+    VALUES(?,?,1,CURRENT_TIMESTAMP,?,?)
+    ON CONFLICT(chat_id,user_id) DO UPDATE SET message_count=user_activity.message_count+1,last_seen=CURRENT_TIMESTAMP,display_name=excluded.display_name,username=excluded.username""",(chat_id,user_id,display_name,username))
   await db.commit()
 async def history(chat_id,limit=MAX_HISTORY):
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
@@ -58,35 +71,9 @@ async def user_count(chat_id):
   cur=await db.execute("SELECT COUNT(*) FROM users WHERE chat_id=?",(chat_id,));return (await cur.fetchone())[0]
 async def clear_chat(chat_id):
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  for table in ("messages","users","group_memory","tournament_missed"):
+  for table in ("messages","users","group_memory","user_activity"):
    await db.execute(f"DELETE FROM {table} WHERE chat_id=?",(chat_id,))
   await db.commit()
-async def mark_missed(chat_id,user_id,username,display_name,tournament):
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  await db.execute("""INSERT INTO tournament_missed(chat_id,user_id,username,display_name,tournament,last_reminder) VALUES(?,?,?,?,?,0)
-  ON CONFLICT(chat_id,user_id) DO UPDATE SET username=excluded.username,display_name=excluded.display_name,tournament=excluded.tournament,last_reminder=0""",(chat_id,user_id,username,display_name,tournament[:120]))
-  await db.commit()
-async def get_missed(chat_id):
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("SELECT user_id,username,display_name,tournament,last_reminder FROM tournament_missed WHERE chat_id=? ORDER BY display_name",(chat_id,))
-  return await cur.fetchall()
-async def find_user(chat_id,username):
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("SELECT user_id,username,display_name FROM users WHERE chat_id=? AND lower(username)=lower(?) ORDER BY last_seen DESC LIMIT 1",(chat_id,username.lstrip("@")))
-  return await cur.fetchone()
-async def remove_missed(chat_id,user_id):
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("DELETE FROM tournament_missed WHERE chat_id=? AND user_id=?",(chat_id,user_id));await db.commit();return cur.rowcount
-async def update_reminder(chat_id,user_id,now):
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  await db.execute("UPDATE tournament_missed SET last_reminder=? WHERE chat_id=? AND user_id=?",(now,chat_id,user_id));await db.commit()
-
-async def get_missed_chats():
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("SELECT DISTINCT chat_id FROM tournament_missed")
-  return [row[0] for row in await cur.fetchall()]
-
-
 async def save_intel_item(kind,item_key,title,summary,url,source,published_at=''):
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
   await db.execute('PRAGMA busy_timeout=30000')
@@ -124,39 +111,11 @@ async def get_enabled_group_chats():
 
 async def get_user_stats(chat_id, user_id):
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("SELECT COUNT(*),MAX(created_at) FROM messages WHERE chat_id=? AND user_id=? AND role='user'",(chat_id,user_id))
+  cur=await db.execute("SELECT message_count,last_seen FROM user_activity WHERE chat_id=? AND user_id=?",(chat_id,user_id))
   row=await cur.fetchone()
-  return {"messages":row[0] or 0,"last_seen":row[1]}
+  return {"messages":row[0] if row else 0,"last_seen":row[1] if row else None}
 
 async def get_top_users(chat_id, limit=10):
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("SELECT user_id,display_name,username,COUNT(*) AS total FROM messages WHERE chat_id=? AND role='user' AND user_id IS NOT NULL GROUP BY user_id ORDER BY total DESC LIMIT ?",(chat_id,max(1,min(20,int(limit)))))
+  cur=await db.execute("SELECT user_id,display_name,username,message_count FROM user_activity WHERE chat_id=? ORDER BY message_count DESC,last_seen DESC LIMIT ?",(chat_id,max(1,min(20,int(limit)))))
   return await cur.fetchall()
-
-async def create_tournament(chat_id, title):
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("INSERT INTO tournaments(chat_id,title) VALUES(?,?)",(chat_id,title[:120]))
-  await db.commit()
-  return cur.lastrowid
-
-async def get_open_tournament(chat_id):
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("SELECT id,title FROM tournaments WHERE chat_id=? AND status='open' ORDER BY id DESC LIMIT 1",(chat_id,))
-  return await cur.fetchone()
-
-async def join_tournament(tournament_id,user_id,display_name,username):
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("INSERT OR IGNORE INTO tournament_entries(tournament_id,user_id,display_name,username) VALUES(?,?,?,?)",(tournament_id,user_id,display_name,username))
-  await db.commit()
-  return cur.rowcount == 1
-
-async def tournament_participants(tournament_id):
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("SELECT display_name,username FROM tournament_entries WHERE tournament_id=? ORDER BY joined_at",(tournament_id,))
-  return await cur.fetchall()
-
-async def close_tournament(tournament_id):
- async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("UPDATE tournaments SET status='closed' WHERE id=? AND status='open'",(tournament_id,))
-  await db.commit()
-  return cur.rowcount == 1
