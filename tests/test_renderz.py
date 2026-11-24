@@ -12,7 +12,7 @@ from app.renderz import (
 )
 
 
-class RenderZParsingTests(unittest.TestCase):
+class RenderZParsingTests(unittest.IsolatedAsyncioTestCase):
     def test_player_list_extracts_ovr_and_group_stats(self):
         html = """
         <a href="/player/30924202-essien">
@@ -124,9 +124,7 @@ class RenderZParsingTests(unittest.TestCase):
         self.assertNotIn("цена", result.casefold())
 
     async def test_secondary_search_returns_publication_links_without_verified_stats(self):
-        import asyncio
         from unittest.mock import AsyncMock
-        import xml.etree.ElementTree as ET
 
         response = AsyncMock()
         response.text = """<rss><channel><item><title>FC Mobile player card update</title><link>https://example.com/card-news</link><description>Discussion of cards</description><pubDate>Tue, 24 Nov 2026 10:00:00 GMT</pubDate></item></channel></rss>"""
@@ -138,7 +136,7 @@ class RenderZParsingTests(unittest.TestCase):
         self.assertIn("Bing News RSS", result)
         self.assertIn("https://example.com/card-news", result)
         self.assertIn("не подтверждённая карточка", result)
-        self.assertFalse(is_verified_player_context(result)
+        self.assertFalse(is_verified_player_context(result))
 
 
 
