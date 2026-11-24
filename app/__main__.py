@@ -7,7 +7,7 @@ import time
 
 import httpx
 
-from .config import BOT_TOKEN, GROQ_API_KEY, GROQ_API_URL, GROQ_MODEL, GROQ_VISION_MODEL, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY
+from .config import BOT_TOKEN, GROQ_API_KEY, GROQ_API_URL, GROQ_MODEL, GROQ_VISION_MODEL, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY, MAX_HISTORY
 from .storage import (
     init_db, add_message, history, get_memory, save_memory, get_settings,
     set_setting, user_count, clear_chat, get_enabled_group_chats,
@@ -35,6 +35,8 @@ last_spontaneous = {}
 last_direct = {}
 last_bot_reply = {}
 summary_counter = {}
+MEMORY_SUMMARY_INTERVAL = 30
+MEMORY_SUMMARY_RETRY_AFTER = 5
 
 class TelegramAPIError(RuntimeError):
     pass
@@ -253,14 +255,19 @@ async def handle_message(message):
     stored_text = text_in or ("[Отправлено изображение]" if has_image else "")
     await add_message(chat_id, user["id"], user.get("username"), name, "user", f"{name}: {stored_text}")
     summary_counter[chat_id] = summary_counter.get(chat_id, 0) + 1
-    if summary_counter[chat_id] >= 60:
+    if summary_counter[chat_id] >= MEMORY_SUMMARY_INTERVAL:
         try:
             old_memory = await get_memory(chat_id)
-            update = await summarize(old_memory, await history(chat_id))
+            # storage retains MAX_HISTORY * 3 rows per chat; summarize a broad
+            # window instead of silently summarizing only the default 16 turns.
+            recent_for_memory = await history(chat_id, limit=MAX_HISTORY * 3)
+            update = await summarize(old_memory, recent_for_memory)
             await save_memory(chat_id, update)
+            summary_counter[chat_id] = 0
         except Exception:
             log.exception("Memory summary refresh failed")
-        summary_counter[chat_id] = 0
+            # Retry after a few more messages, not on every incoming update.
+            summary_counter[chat_id] = MEMORY_SUMMARY_INTERVAL - MEMORY_SUMMARY_RETRY_AFTER
 
     settings = await get_settings(chat_id)
     if not settings["enabled"]:
