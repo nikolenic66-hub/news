@@ -9,8 +9,15 @@ FC_WORDS=re.compile(r"(?i)(fc mobile|fcm|fcmobile|фк мобайл|фкм|ов�
 def is_fc_topic(text:str)->bool:return bool(FC_WORDS.search(text or ""))
 def is_direct_message(text:str,bot_username:str|None,reply_to_bot:bool)->bool:
  return bool(bot_username and ("@"+bot_username.lower()) in (text or "").lower()) or reply_to_bot
-def should_spontaneously_reply(text:str,activity:float,random_value:float,cooldown_elapsed:float,cooldown_seconds:float=240)->bool:
- return is_fc_topic(text) and cooldown_elapsed>=cooldown_seconds and random_value<max(0.0,min(.5,activity))
+def should_spontaneously_reply(text:str,activity:float,random_value:float,cooldown_elapsed:float,cooldown_seconds:float=240,previous_role:str|None=None,reply_to_human:bool=False)->bool:
+ # Ambient participation is deliberately conservative: don't interrupt a
+ # human-to-human reply chain or speak immediately after the bot itself.
+ if previous_role == "assistant" or reply_to_human:
+  return False
+ value=(text or "").strip()
+ if len(value)<12 or value.startswith("/"):
+  return False
+ return is_fc_topic(value) and cooldown_elapsed>=cooldown_seconds and random_value<max(0.0,min(.5,activity))
 
 
 FOLLOWUP_START = re.compile(r"(?i)^(?:а\s+)?(?:почему|зачем|как|если|что|где|когда|сколько|какой|какая|какие|какое|и\s+что|и\s+как|а\s+дальше|дальше|понял|понятно|ясно|да|нет|неа|точно|серьёзно|серьезно|то\s+есть|это|он|она|они|там|тогда)\b")
