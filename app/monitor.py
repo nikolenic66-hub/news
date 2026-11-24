@@ -25,7 +25,7 @@ QUESTION_REFRESH_SECONDS = 90  # question-specific Google News lookup
 _last_on_demand_refresh = 0.0
 _last_question_refresh = 0.0
 REQUEST_HEADERS = {
-    "User-Agent": "FC-Mate/1.0 (+FC Mobile community news monitor)",
+    "User-Agent": "Vasek/1.0 (+FC Mobile community news monitor)",
     "Accept": "text/html,application/rss+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
@@ -289,7 +289,7 @@ async def build_intel_context(query, client=None):
                 current_time = datetime.now(timezone.utc)
                 for entry in parse_rss(feed):
                     published = _parse_date(entry.get("published"))
-                    if not published or not (-6 * 3600 <= (current_time - published).total_seconds() <= 14 * 24 * 3600):
+                    if not published or not (-6 * 3600 <= (current_time - published).total_seconds() <= 7 * 24 * 3600):
                         continue
                     await save_intel_item(
                         "question_search", entry["url"], entry["title"],
