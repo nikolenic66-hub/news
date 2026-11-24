@@ -26,6 +26,7 @@ if __import__("os").getenv("DATABASE_URL"):
  log.warning("DATABASE_URL detected but this build uses SQLite; set DB_PATH to a persistent SQLite file if persistence is required")
 bot=Bot(BOT_TOKEN);dp=Dispatcher()
 last_spontaneous={};last_direct={};summary_counter={}
+BOT_USERNAME=None
 TOURNAMENT_COOLDOWN=45*60
 async def is_admin(message:Message):
  if not message.from_user:return False
@@ -133,8 +134,7 @@ async def group_message(message:Message):
   except Exception:log.exception("Memory summary refresh failed")
   summary_counter[message.chat.id]=0
  if not settings["enabled"]:return
- bot_user=await bot.get_me()
- direct=is_direct_message(text_in,bot_user.username,bool(message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.id==bot_user.id))
+ direct=is_direct_message(text_in,BOT_USERNAME,bool(message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.id==bot_user.id))
  if direct:
   if now-last_direct.get(message.chat.id,0)<12:return
   last_direct[message.chat.id]=now
@@ -180,19 +180,20 @@ async def tournament_reminder_loop():
     log.exception("Tournament reminder failed for chat %s",chat_id)
 
 async def main():
- log.info("Starting application initialization")
- try:
-  await init_db()
-  log.info("SQLite initialization succeeded")
-  log.info("Checking Telegram token/API connectivity")
-  me=await bot.get_me()
-  log.info("Telegram API connection succeeded; bot=%s (id=%s)",me.username,me.id)
-  log.info("Starting polling")
-  asyncio.create_task(tournament_reminder_loop())
-  await dp.start_polling(bot,allowed_updates=dp.resolve_used_update_types())
- except Exception:
-  log.exception("Startup or polling failed")
-  raise
+ global BOT_USERNAME
+ log.info("Startup: preparing SQLite")
+ await init_db()
+ log.info("Startup: SQLite is ready")
+ log.info("Startup: validating Telegram token with getMe")
+ me=await bot.get_me()
+ BOT_USERNAME=me.username
+ log.info("Startup: Telegram OK, username=@%s, id=%s",me.username,me.id)
+ # Remove any stale webhook so long polling is not rejected by Telegram.
+ await bot.delete_webhook(drop_pending_updates=False)
+ log.info("Startup: webhook cleared; starting polling loop")
+ asyncio.create_task(tournament_reminder_loop())
+ await dp.start_polling(bot,allowed_updates=dp.resolve_used_update_types())
+
 if __name__=="__main__":
  try: asyncio.run(main())
  except Exception:
