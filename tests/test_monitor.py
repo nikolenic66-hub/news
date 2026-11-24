@@ -63,12 +63,24 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
           <link>https://example.com/news</link>
           <description>New gameplay update</description>
           <pubDate>Tue, 24 Nov 2026 10:00:00 GMT</pubDate>
-          <source>Example</source>
+          <source url="https://example.com">Example</source>
         </item></channel></rss>"""
         entries = parse_rss(feed)
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]["title"], "FC Mobile update")
         self.assertEqual(entries[0]["source"], "Example")
+        self.assertEqual(entries[0]["source_url"], "https://example.com")
+
+    def test_renderz_is_excluded_until_permission(self):
+        self.assertTrue(monitor._is_disallowed_source({
+            "source": "RenderZ", "source_url": "https://renderz.app/news"
+        }))
+        self.assertTrue(monitor._is_disallowed_source({
+            "source": "Google News", "url": "https://renderz.app/player/123"
+        }))
+        self.assertFalse(monitor._is_disallowed_source({
+            "source": "EA Sports", "source_url": "https://www.ea.com/news"
+        }))
 
 
     async def test_question_context_refreshes_live_and_ignores_old_articles(self):
