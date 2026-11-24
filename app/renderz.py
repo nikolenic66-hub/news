@@ -11,7 +11,8 @@ import logging
 import re
 import time
 from html.parser import HTMLParser
-from urllib.parse import urljoin
+from urllib.parse import quote_plus, urljoin
+import xml.etree.ElementTree as ET
 
 BASE_URL = "https://renderz.app"
 PLAYERS_URL = BASE_URL + "/players"
@@ -240,6 +241,47 @@ def _extract_search_query(message: str) -> str:
     value = " ".join(value.split())
     return value[:80]
 
+
+
+async def secondary_player_search(message: str, client) -> str:
+    """Fetch recent player/card discussion links from Bing News RSS as a fallback.
+    This is context only, never a source of verified card OVR/stats.
+    """
+    query = _extract_search_query(message)
+    if len(query) < 2:
+        return ""
+    terms = re.sub(r"[^\\w\\s'-]", " ", query)
+    terms = " ".join(terms.split())[:70]
+    url = "https://www.bing.com/news/search?q=" + quote_plus("FC Mobile player card " + terms) + "&format=rss"
+    try:
+        response = await client.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; VasekFCMobileBot/1.0)", "Accept": "application/rss+xml,application/xml,text/xml"},
+            follow_redirects=True,
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        root = ET.fromstring(response.text)
+        items = []
+        for entry in root.findall(".//item")[:5]:
+            title = (entry.findtext("title") or "").strip()
+            link = (entry.findtext("link") or "").strip()
+            description = re.sub(r"<[^>]+>", " ", entry.findtext("description") or "")
+            description = " ".join(description.split())[:300]
+            pubdate = (entry.findtext("pubDate") or "").strip()
+            if title and link:
+                items.append(f"- {title} ({pubdate or 'дата не указана'}): {description} Ссылка: {link}")
+        if not items:
+            return "Вторичный поиск Bing News: свежих результатов по карточкам не найдено."
+        return (
+            "ВТОРИЧНЫЙ ПОИСК ПО ПУБЛИКАЦИЯМ (Bing News RSS). Это обсуждения/публикации, "
+            "а не подтверждённая карточка базы RenderZ. Не выводи из них точные OVR или статы без "
+            "открытой и проверенной карточки. Ссылки для дальнейшей проверки:\\n"
+            + "\\n".join(items)
+        )
+    except Exception as exc:
+        log.warning("Secondary player/card search failed: %s", type(exc).__name__)
+        return "Вторичный поиск публикаций тоже сейчас недоступен."
 
 def is_verified_player_context(context: str) -> bool:
     """True only when RenderZ returned at least one parsed player card."""
