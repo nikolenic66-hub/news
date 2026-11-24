@@ -19,6 +19,6 @@ except ValueError:
     MAX_HISTORY = 16
 
 # This version uses SQLite; DATABASE_URL is detected in startup diagnostics but not consumed.
-DB_PATH = os.getenv("DB_PATH", "data/chatmate.sqlite3").strip()
+DB_PATH = os.getenv("DB_PATH", "/data/chatmate.sqlite3").strip()
 if DB_PATH != ":memory:":
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
