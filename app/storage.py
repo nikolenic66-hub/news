@@ -118,3 +118,43 @@ async def get_enabled_group_chats():
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
   cur=await db.execute('SELECT DISTINCT m.chat_id FROM messages m LEFT JOIN settings s ON s.chat_id=m.chat_id WHERE m.chat_id < 0 AND COALESCE(s.enabled,1)=1')
   return [row[0] for row in await cur.fetchall()]
+
+
+async def get_user_stats(chat_id, user_id):
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  cur=await db.execute("SELECT COUNT(*),MAX(created_at) FROM messages WHERE chat_id=? AND user_id=? AND role='user'",(chat_id,user_id))
+  row=await cur.fetchone()
+  return {"messages":row[0] or 0,"last_seen":row[1]}
+
+async def get_top_users(chat_id, limit=10):
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  cur=await db.execute("SELECT user_id,display_name,username,COUNT(*) AS total FROM messages WHERE chat_id=? AND role='user' AND user_id IS NOT NULL GROUP BY user_id ORDER BY total DESC LIMIT ?",(chat_id,max(1,min(20,int(limit)))))
+  return await cur.fetchall()
+
+async def create_tournament(chat_id, title):
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  cur=await db.execute("INSERT INTO tournaments(chat_id,title) VALUES(?,?)",(chat_id,title[:120]))
+  await db.commit()
+  return cur.lastrowid
+
+async def get_open_tournament(chat_id):
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  cur=await db.execute("SELECT id,title FROM tournaments WHERE chat_id=? AND status='open' ORDER BY id DESC LIMIT 1",(chat_id,))
+  return await cur.fetchone()
+
+async def join_tournament(tournament_id,user_id,display_name,username):
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  cur=await db.execute("INSERT OR IGNORE INTO tournament_entries(tournament_id,user_id,display_name,username) VALUES(?,?,?,?)",(tournament_id,user_id,display_name,username))
+  await db.commit()
+  return cur.rowcount == 1
+
+async def tournament_participants(tournament_id):
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  cur=await db.execute("SELECT display_name,username FROM tournament_entries WHERE tournament_id=? ORDER BY joined_at",(tournament_id,))
+  return await cur.fetchall()
+
+async def close_tournament(tournament_id):
+ async with aiosqlite.connect(DB_PATH, timeout=30) as db:
+  cur=await db.execute("UPDATE tournaments SET status='closed' WHERE id=? AND status='open'",(tournament_id,))
+  await db.commit()
+  return cur.rowcount == 1
