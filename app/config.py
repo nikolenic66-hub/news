@@ -24,7 +24,7 @@ GROQ_API_URL = os.getenv(
 ).strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
 GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b").strip()
-BOT_NAME = os.getenv("BOT_NAME", "FC Mate").strip() or "FC Mate"
+BOT_NAME = os.getenv("BOT_NAME", "Васёк").strip() or "Васёк"
 PERSONA = os.getenv(
     "BOT_PERSONA",
     "Дружелюбный, смешной фанат FC Mobile, иногда язвительный, без токсичности.",
