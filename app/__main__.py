@@ -16,7 +16,7 @@ from .storage import (
 from .logic import is_fc_topic, is_bot_name_call, is_recent_bot_followup, should_spontaneously_reply
 from .ai import reply, summarize, ProviderError
 from .monitor import monitor_loop, build_intel_context, format_news_digest, format_sources_status
-from .renderz import player_context, is_player_data_question, is_verified_player_context
+from .renderz import player_context, secondary_player_search, is_player_data_question, is_verified_player_context
 
 logging.basicConfig(
     level=logging.INFO,
@@ -362,16 +362,30 @@ async def handle_message(message):
             log.exception("RenderZ player lookup failed")
             card_context = ""
         if not is_verified_player_context(card_context):
-            if "не найдена" in card_context:
-                failure = "Поискал в RenderZ, но подходящую карточку не нашёл. Не буду придумывать OVR и статы. Напиши имя латиницей или уточни OVR/программу карты."
-            elif "недоступны" in card_context or not card_context:
-                failure = "RenderZ сейчас не дал проверить карточку. Поэтому точные OVR и характеристики не назову, чтобы не наврать. Попробуй повторить запрос чуть позже."
-            else:
-                failure = "Не получилось подтвердить карточку в RenderZ. Не буду угадывать OVR и характеристики."
-            await send(chat_id, failure, message.get("message_id"))
-            await add_message(chat_id, None, None, BOT_NAME, "assistant", failure)
-            last_bot_reply[chat_id] = time.time()
-            return
+            # RenderZ is the primary source for exact card figures. When it
+            # fails or returns no match, use a secondary publication search and
+            # keep the conversation flowing, but do not present snippets as
+            # verified card stats.
+            try:
+                secondary_context = await secondary_player_search(text_in, HTTP)
+            except Exception:
+                log.exception("Secondary player search failed")
+                secondary_context = "Вторичный поиск публикаций не сработал."
+            prompt.insert(0, {
+                "role": "system",
+                "content": (
+                    "ЗАПРОС О КАРТОЧКЕ ИГРОКА: RenderZ не подтвердил карточку в этот раз. "
+                    "Продолжай отвечать естественно, не превращай это в шаблонный отказ. "
+                    "Можно использовать найденные ниже публикации/ссылки как подсказки для дальнейшей проверки, "
+                    "но они не являются подтверждённой карточкой. НЕ называй точные OVR, характеристики, ранги, "
+                    "цены или программу карты, если они не подтверждены карточкой RenderZ. "
+                    "Если вопрос требует точных цифр, коротко объясни, что пока не удалось подтвердить, "
+                    "и предложи уточнить версию карты/имя либо открыть ссылку из результатов. "
+                    "Не выдумывай и не утверждай, что проверил карточку, если этого не было.\\n"
+                    + "Результат RenderZ: " + (card_context or "пустой ответ") + "\\n"
+                    + secondary_context
+                ),
+            })
         prompt.insert(0, {
             "role": "system",
             "content": (
