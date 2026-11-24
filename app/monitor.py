@@ -23,12 +23,6 @@ REQUEST_HEADERS = {
     "Accept": "text/html,application/rss+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-CODE_PAGES = (
-    ("FCMobileForum", "https://www.fcmobileforum.com/fcmobile-redeem-codes"),
-    ("FC Mobile Squad", "https://fcmobilesquad.com/redeem-code"),
-    ("Mr Believer Hub", "https://mrbelieverhub.com/fcmobile-redeem-codes"),
-)
-
 NEWS_FEEDS = (
     (
         "EA official news via Google News RSS",
@@ -135,11 +129,17 @@ def parse_rss(xml_text):
 
 
 def _codes_from_recent_article(entry):
+    """Accept code candidates only from genuinely recent, explicitly code-related articles."""
     published = _parse_date(entry.get("published"))
-    if not published or (datetime.now(timezone.utc) - published).total_seconds() > 72 * 3600:
+    if not published:
         return []
-    text = entry.get("title", "") + " " + entry.get("summary", "")
-    if not re.search(r"\b(code|redeem|promo)\b", text, re.IGNORECASE):
+    age_seconds = (datetime.now(timezone.utc) - published).total_seconds()
+    # Old articles and implausibly future-dated items must never trigger alerts.
+    if age_seconds < -2 * 3600 or age_seconds > 48 * 3600:
+        return []
+    title = entry.get("title", "")
+    text = title + " " + entry.get("summary", "")
+    if not re.search(r"\b(redeem\s+code|promo\s+code|new\s+code|code\s+released|code\s+available)\b", text, re.IGNORECASE):
         return []
     candidates = re.findall(r"(?<![A-Z0-9])([A-Z][A-Z0-9]{5,23})(?![A-Z0-9])", text.upper())
     return [c for c in dict.fromkeys(candidates) if c not in STOP_WORDS]
@@ -152,30 +152,40 @@ async def _get_text(client, url):
 
 
 async def check_promo_codes_once(client, send_alert):
-    """Check community promo-code lists; notify only for newly discovered codes."""
+    """Alert only on codes mentioned in dated, recent promo-code articles.
+
+    Static code-list pages are deliberately not used for alerts: they often retain
+    old codes and provide no trustworthy publication/creation timestamp.
+    """
     new_codes = 0
-    for source, url in CODE_PAGES:
+    for source_name, url, kind in NEWS_FEEDS:
+        if kind != "promo_news":
+            continue
         try:
-            page = await _get_text(client, url)
-            for code in extract_active_codes(page):
-                inserted = await save_promo_code(code, source, url)
-                if inserted:
-                    new_codes += 1
-                    await send_alert(
-                        "🚨 Новый код FC Mobile: " + code + "\\n"
-                        "Источник: " + source + "\\n"
-                        "Проверяй и активируй сразу: https://redeem.fcm.ea.com/\\n"
-                        "Важно: код найден в активном списке сообщества; EA не подтверждает его статус автоматически. "
-                        "Коды могут быстро истечь или закончиться."
-                    )
+            feed = await _get_text(client, url)
+            for entry in parse_rss(feed):
+                for code in _codes_from_recent_article(entry):
+                    inserted = await save_promo_code(code, source_name, entry["url"])
+                    if inserted:
+                        new_codes += 1
+                        await send_alert(
+                            "🚨 Возможный новый промокод FC Mobile: " + code + "\\n"
+                            "Дата публикации: " + (entry.get("published") or "не указана") + "\\n"
+                            "Публикация: " + entry["title"][:250] + "\\n"
+                            "Источник: " + entry["url"] + "\\n"
+                            "Активировать: https://redeem.fcm.ea.com/\\n"
+                            "Код найден в свежей публикации за последние 48 часов; действительность проверь на странице EA."
+                        )
         except Exception:
-            log.exception("Promo-code source failed: %s", source)
+            log.exception("Promo-code feed failed: %s", source_name)
     return new_codes
 
 
 async def check_news_once(client):
     """Collect recent FC Mobile news without running promo-code scans."""
     for source_name, url, kind in NEWS_FEEDS:
+        if kind == "promo_news":
+            continue
         try:
             feed = await _get_text(client, url)
             for entry in parse_rss(feed):
