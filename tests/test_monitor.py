@@ -80,9 +80,7 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
         stale = ("official_news", "Old FIFA Mobile 2024 update", "Old data", "https://example.com/old", "Example", stale_date)
 
         with patch.object(monitor.time, "monotonic", return_value=10000), \
-        with patch.object(monitor, "_last_on_demand_refresh", 0), \
              patch.object(monitor, "_last_question_refresh", 0), \
-             patch.object(monitor, "check_news_once", new=AsyncMock()) as general_refresh, \
              patch.object(monitor, "_get_text", new=AsyncMock(return_value="<rss><channel></channel></rss>")) as fetch, \
              patch.object(monitor, "save_intel_item", new=AsyncMock()), \
              patch.object(monitor, "get_recent_intel", new=AsyncMock(return_value=[fresh, stale])), \
