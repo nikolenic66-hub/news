@@ -8,6 +8,7 @@ from app.renderz import (
     _transliterate_name_token,
     is_player_data_question,
     is_verified_player_context,
+    secondary_player_search,
 )
 
 
@@ -121,6 +122,24 @@ class RenderZParsingTests(unittest.TestCase):
         self.assertIn("124 OVR", result)
         self.assertNotIn("PAC", result)
         self.assertNotIn("цена", result.casefold())
+
+    async def test_secondary_search_returns_publication_links_without_verified_stats(self):
+        import asyncio
+        from unittest.mock import AsyncMock
+        import xml.etree.ElementTree as ET
+
+        response = AsyncMock()
+        response.text = """<rss><channel><item><title>FC Mobile player card update</title><link>https://example.com/card-news</link><description>Discussion of cards</description><pubDate>Tue, 24 Nov 2026 10:00:00 GMT</pubDate></item></channel></rss>"""
+        response.raise_for_status = lambda: None
+        client = AsyncMock()
+        client.get = AsyncMock(return_value=response)
+
+        result = await secondary_player_search("OVR Messi card", client)
+        self.assertIn("Bing News RSS", result)
+        self.assertIn("https://example.com/card-news", result)
+        self.assertIn("не подтверждённая карточка", result)
+        self.assertFalse(is_verified_player_context(result)
+
 
 
 if __name__ == "__main__":
