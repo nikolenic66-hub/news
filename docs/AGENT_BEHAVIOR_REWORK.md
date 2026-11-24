@@ -55,3 +55,10 @@ The added tests check the group persona guardrails and the safe-memory summariza
 - The follow-up is treated as a direct turn, so it bypasses the ordinary spontaneous-reply lottery and the short direct-message cooldown.
 - The bot reply timestamp is held in process memory; after a restart, explicit Telegram replies/name calls still work, while implicit follow-up routing resumes after the next bot response.
 - This is intentionally not a general “answer every short message” rule. Tests cover positive cases, unrelated messages, stale windows, and commands.
+
+
+## Group discussion and recap increment (2026-11-24)
+
+- Ambient replies require a substantive FC Mobile message, the existing activity probability and cooldown, and are suppressed when the message is an explicit reply to a human or immediately follows a bot reply. Direct mentions, bot replies, and recognized follow-ups still take the direct path.
+- Recap behavior is explicitly constrained: summarize only the history actually supplied, distinguish participants' positions, and identify a speaker only when attribution is present. Missing history must be acknowledged rather than invented.
+- No extra model call, paid service, background scheduler, or database migration was introduced.
