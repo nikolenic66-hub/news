@@ -96,7 +96,6 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
     async def test_empty_live_context_explicitly_rejects_old_knowledge(self):
         from unittest.mock import AsyncMock, patch
 
-        with patch.object(monitor, "_last_on_demand_refresh", 10**12), \
              patch.object(monitor, "_last_question_refresh", 10**12), \
              patch.object(monitor, "get_recent_intel", new=AsyncMock(return_value=[])), \
              patch.object(monitor, "get_recent_promo_codes", new=AsyncMock(return_value=[])):
