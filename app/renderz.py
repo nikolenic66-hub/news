@@ -20,6 +20,7 @@ NEGATIVE_CACHE_TTL = 45
 log = logging.getLogger(__name__)
 REQUEST_TIMEOUT = 18
 MAX_RESULTS = 4
+MAX_SEARCH_PAGES = 8
 
 _cache: dict[str, tuple[float, str]] = {}
 _cache_lock = asyncio.Lock()
@@ -329,11 +330,8 @@ async def player_context(message: str, client) -> str:
     found_query_count = 0
     for player_query in search_queries:
         matched = []
-        for url in (
-            f"{PLAYERS_URL}?search={quote_plus(player_query)}",
-            f"{PLAYERS_URL}?q={quote_plus(player_query)}",
-            PLAYERS_URL,
-        ):
+        for page_number in range(1, MAX_SEARCH_PAGES + 1):
+            url = PLAYERS_URL if page_number == 1 else f"{PLAYERS_URL}?page={page_number}"
             try:
                 page = await _get_page(client, url)
                 successful_fetch = True
@@ -342,6 +340,8 @@ async def player_context(message: str, client) -> str:
                     break
             except Exception as exc:
                 errors.append(type(exc).__name__)
+                # A page failure should not trigger a burst of requests.
+                break
         if matched:
             found_query_count += 1
         for card in matched:
@@ -352,8 +352,9 @@ async def player_context(message: str, client) -> str:
         if successful_fetch:
             log.info("RenderZ pages loaded but no matching public card was parsed for query=%r", query)
             context = (
-                "ДАННЫЕ RENDERZ: по запросу «" + query + "» карточка не найдена в публичном списке. "
-                "Не выдумывай OVR, статы, ранг или цену. Уточни латинское написание имени либо версию карточки."
+                "ДАННЫЕ RENDERZ: по запросу «" + query + "» карточка не найдена среди первых "
+                + str(MAX_SEARCH_PAGES) + " страниц публичного списка. "
+                "Не выдумывай OVR, статы, ранг или цену. Уточни латинское написание имени, OVR или программу карты."
             )
         else:
             log.warning("RenderZ public player pages unavailable for query=%r; errors=%s", query, errors[:3])
