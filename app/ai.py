@@ -12,7 +12,13 @@ async def _completion(messages,temperature=0.8,max_tokens=450):
         async with httpx.AsyncClient(timeout=httpx.Timeout(40,connect=10)) as client:
             response=await client.post(f"{AI_BASE_URL}/chat/completions",
               headers={"Authorization":f"Bearer {AI_KEY}","Content-Type":"application/json"},json=payload)
-            response.raise_for_status()
+            if response.is_error:
+                # APInex often returns a useful JSON explanation for 401/402/429.
+                # Include the provider message in logs, but never log request headers/API keys.
+                detail = (response.text or "").strip().replace("\\n", " ")[:1200]
+                raise ProviderError(
+                    f"APInex HTTP {response.status_code}: {detail or response.reason_phrase}"
+                )
             data=response.json()
         answer=data["choices"][0]["message"]["content"]
         if not isinstance(answer,str) or not answer.strip(): raise ProviderError("Пустой ответ модели")
