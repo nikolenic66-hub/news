@@ -12,7 +12,6 @@ class ProviderError(RuntimeError):
 
 # Serialize Groq calls to avoid overlapping bursts from chat replies and memory refreshes.
 _AI_SEMAPHORE = asyncio.Semaphore(1)
-_TEXT_INPUT_CHAR_LIMIT = 8500
 _MAX_TEXT_OUTPUT_TOKENS = 360
 _MAX_VISION_OUTPUT_TOKENS = 650
 
@@ -33,24 +32,24 @@ def _bounded_messages(messages):
     # Keep the persona intact, then cap auxiliary source/context blocks.
     kept_systems = []
     if systems:
-        kept_systems.append({"role": "system", "content": systems[0]["content"][:4200]})
-    budget = 2800
+        kept_systems.append({"role": "system", "content": systems[0]["content"][:14000]})
+    budget = 2200
     for item in reversed(systems[1:]):
         if budget <= 0:
             break
-        content = item["content"][:min(1000, budget)]
+        content = item["content"][:min(900, budget)]
         if content:
             kept_systems.insert(1, {"role": "system", "content": content})
             budget -= len(content)
 
     bounded_conversation = []
-    recent = conversation[-8:]
+    recent = conversation[-5:]
     for item in recent:
         content = item["content"]
         if isinstance(content, str):
             # Memory summarization is a single long user prompt; preserve more
             # there while normal chat remains intentionally compact.
-            cap = 2600 if len(recent) <= 2 else 650
+            cap = 2600 if len(recent) <= 2 else (650 if item is recent[-1] else 450)
             content = content[:cap]
         elif isinstance(content, list):
             # Preserve image parts; only trim their associated text content.
