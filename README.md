@@ -14,15 +14,15 @@ Build from this repository using Dockerfile. Set the environment variables below
 | Variable | Meaning |
 |---|---|
 | TELEGRAM_BOT_TOKEN | Required Telegram bot token |
-| AI_API_KEY | Required API key for OpenAI-compatible provider |
-| AI_BASE_URL | Provider API base ending in /v1 (default DeepSeek) |
-| AI_MODEL | Model name accepted by provider |
+| AI_API_KEY or DEEPSEEK_API_KEY | Required API key for OpenAI-compatible provider (legacy Amvera name supported) |
+| AI_BASE_URL or DEEPSEEK_BASE_URL | Provider API base ending in /v1 (default DeepSeek) |
+| AI_MODEL or DEEPSEEK_MODEL | Model name accepted by provider |
 | ADMIN_IDS | Optional comma-separated Telegram user IDs, in addition to Telegram group admins |
 | BOT_NAME | Bot display name |
 | BOT_PERSONA | Default personality |
 | REPLY_PROBABILITY | Chance of unsolicited reply on relevant FC topic, default 0.08, capped at 0.50 |
 | MAX_HISTORY | Recent context size, 6–30 messages |
-| DB_PATH | SQLite file path, default data/chatmate.sqlite3 |
+| DB_PATH | SQLite file path, default data/chatmate.sqlite3; DATABASE_URL is not used by this SQLite build |
 
 ## Commands in group
 - `/help`, `/status`
