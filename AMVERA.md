@@ -4,9 +4,9 @@ Build and run from the repository root with the included Dockerfile. The contain
 
 Required environment variables:
 - `TELEGRAM_BOT_TOKEN`: Telegram bot token from BotFather
-- `APINEX_API_KEY`: Apinex API key
-- `APINEX_API_URL`: full chat-completions URL; defaults to `https://api.apinex.bond/v1/chat/completions`
-- `APINEX_MODEL`: model name; defaults to `free/deepseek-v4-pro-0813`
+- `GROQ_API_KEY`: Groq API key from https://console.groq.com/keys
+- `GROQ_API_URL`: Chat Completions URL; defaults to `https://api.groq.com/openai/v1/chat/completions`
+- `GROQ_MODEL`: model name; defaults to `openai/gpt-oss-120b`
 
 Optional settings:
 - `BOT_NAME`: displayed bot name (default: FC Mate)
@@ -16,6 +16,8 @@ Optional settings:
 - `MAX_HISTORY`: number of recent messages kept in context (default: 16)
 - `DB_PATH`: SQLite database file (default: `/data/chatmate.sqlite3`)
 
-Important: this version uses SQLite via `aiosqlite`. It does not read `DATABASE_URL` and does not connect to PostgreSQL. Configure an Amvera persistent storage mount at `/data` if chat history and tournament lists must survive container rebuilds/restarts. The bot does not require `DEEPSEEK_MODEL`, `AI_API_KEY`, or `AI_BASE_URL`.
+Important: this version uses SQLite via `aiosqlite`. It does not read `DATABASE_URL` and does not connect to PostgreSQL. Configure an Amvera persistent storage mount at `/data` if chat history and tournament lists must survive container rebuilds/restarts.
 
 For group participation, add the bot to the group. To let it read ordinary group messages, disable privacy mode in BotFather with `/setprivacy` -> Disable. Group admin rights are not required for normal replies; the bot checks admin status for moderation commands.
+
+HTTP request logging is reduced to WARNING so Telegram Bot API URLs containing the bot token are not written to application logs. Never put API secrets into GitHub.
