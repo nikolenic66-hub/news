@@ -93,6 +93,20 @@ async def handle_command(message, command, args):
     reply_message = message.get("reply_to_message") or {}
     target = reply_message.get("from") or None
 
+    # Group settings and tournament administration must be changed in the
+    # group itself, where Telegram lets us verify the sender's admin status.
+    group_admin_commands = {
+        "on", "off", "activity", "persona", "memory", "forget", "clear",
+        "missed", "missedlist", "played",
+    }
+    if message.get("chat", {}).get("type") == "private" and command in group_admin_commands:
+        await send(
+            chat_id,
+            "Эта команда меняет настройки группы. Отправь её прямо в чате FC Mobile — там я проверю твои права администратора. Здесь можешь просто общаться со мной.",
+            message.get("message_id"),
+        )
+        return
+
     if command == "start":
         await send(chat_id, f"Я {BOT_NAME} — ИИ-игрок в чате FC Mobile. Обсуждаю карточки, составы и тактики, могу пошутить и иногда сам вклиниться в тему.\n/help", message.get("message_id"))
     elif command == "help":
@@ -190,10 +204,13 @@ async def handle_message(message):
             return
         await handle_command(message, command, args.strip())
         return
-    if chat.get("type") not in ("group", "supergroup"):
+    name = user_name(user)
+    is_private = chat.get("type") == "private"
+    if not is_private and chat.get("type") not in ("group", "supergroup"):
         return
 
-    name = user_name(user)
+    # Private chat is always a direct conversation. In groups, keep the
+    # existing mention/reply trigger and low-frequency spontaneous behavior.
     await add_message(chat_id, user["id"], user.get("username"), name, "user", f"{name}: {text_in}")
     summary_counter[chat_id] = summary_counter.get(chat_id, 0) + 1
     if summary_counter[chat_id] >= 60:
@@ -208,13 +225,13 @@ async def handle_message(message):
     settings = await get_settings(chat_id)
     if not settings["enabled"]:
         return
-    direct = message_mentions_bot(message, text_in) or message_is_reply_to_bot(message)
+    direct = is_private or message_mentions_bot(message, text_in) or message_is_reply_to_bot(message)
     now = time.time()
-    if direct:
+    if direct and not is_private:
         if now - last_direct.get(chat_id, 0) < 12:
             return
         last_direct[chat_id] = now
-    else:
+    elif not is_private:
         chance = REPLY_PROBABILITY if settings["activity"] is None else settings["activity"]
         elapsed = now - last_spontaneous.get(chat_id, 0)
         if not should_spontaneously_reply(text_in, chance, random.random(), elapsed):
