@@ -5,6 +5,7 @@ from app.renderz import (
     _extract_search_query,
     _format_card,
     _player_links,
+    _transliterate_name_token,
     is_player_data_question,
     is_verified_player_context,
 )
@@ -31,6 +32,32 @@ class RenderZParsingTests(unittest.TestCase):
     def test_search_rejects_unmatched_page_rows(self):
         html = '<a href="/player/30924202-essien">124 CDM Essien 147 PAC</a>'
         self.assertEqual(_player_links(html, "Messi"), [])
+
+    def test_search_requires_complete_name_tokens(self):
+        html = """
+        <a href="/player/1-haaland">115 ST Erling Haaland 160 PAC</a>
+        <a href="/player/2-ham">115 ST Ham 150 PAC</a>
+        """
+        self.assertEqual([card["url"] for card in _player_links(html, "Haaland")],
+                         ["https://renderz.app/player/1-haaland"])
+        self.assertEqual(_player_links(html, "land"), [])
+
+    def test_search_supports_multiword_and_accented_names(self):
+        html = """
+        <a href="/player/1-van-dijk">120 CB Virgil van Dijk 130 DEF</a>
+        <a href="/player/2-ribery">118 LW Franck Ribéry 160 PAC</a>
+        """
+        self.assertEqual(len(_player_links(html, "van Dijk")), 1)
+        self.assertEqual(len(_player_links(html, "Ribery")), 1)
+
+    def test_ovr_without_player_name_does_not_return_random_cards(self):
+        html = '<a href="/player/1-haaland">115 ST Haaland 160 PAC</a>'
+        self.assertEqual(_player_links(html, "115"), [])
+
+    def test_russian_name_fallback_transliterates(self):
+        self.assertEqual(_transliterate_name_token("Фоден"), "foden")
+        self.assertEqual(_transliterate_name_token("Мусиала"), "musiala")
+        self.assertEqual(_transliterate_name_token("Haaland"), "Haaland")
 
     def test_search_filters_exact_requested_ovr(self):
         html = """
@@ -69,6 +96,8 @@ class RenderZParsingTests(unittest.TestCase):
         self.assertTrue(is_player_data_question("Messi 115"))
         self.assertTrue(is_player_data_question("Salah stats"))
         self.assertTrue(is_player_data_question("Essien 124"))
+        self.assertTrue(is_player_data_question("Foden stats"))
+        self.assertTrue(is_player_data_question("Kvaratskhelia player card"))
         self.assertFalse(is_player_data_question("Кто выиграл матч вчера?"))
 
     def test_player_context_verification_requires_parsed_card_marker(self):
