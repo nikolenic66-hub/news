@@ -14,6 +14,9 @@ class PersistentActivityTests(unittest.IsolatedAsyncioTestCase):
         self.old_history = storage.MAX_HISTORY
         storage.DB_PATH = os.path.join(self.temp.name, "test.sqlite3")
         storage.MAX_HISTORY = 1
+        import aiosqlite
+        async with aiosqlite.connect(storage.DB_PATH) as db:
+            await db.executescript("CREATE TABLE tournaments(id INTEGER); CREATE TABLE tournament_entries(id INTEGER); CREATE TABLE tournament_missed(id INTEGER);")
         await storage.init_db()
 
     async def asyncTearDown(self):
@@ -30,7 +33,6 @@ class PersistentActivityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(top[0][0], 42)
         self.assertEqual(top[0][3], 9)
         self.assertLessEqual(len(await storage.history(-100)), 3)
-        import aiosqlite
         async with aiosqlite.connect(storage.DB_PATH) as db:
             rows = await (await db.execute("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
         tables = {row[0] for row in rows}
