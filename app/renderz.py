@@ -255,10 +255,15 @@ async def player_context(message: str, client) -> str:
     # the returned visible card labels actually match the requested words.
     errors = []
     cards = []
-    for parameter in ("search", "q"):
-        url = f"{PLAYERS_URL}?{parameter}={quote_plus(search_query)}"
+    successful_fetch = False
+    for url in (
+        f"{PLAYERS_URL}?search={quote_plus(search_query)}",
+        f"{PLAYERS_URL}?q={quote_plus(search_query)}",
+        PLAYERS_URL,
+    ):
         try:
             page = await _get_page(client, url)
+            successful_fetch = True
             cards = _player_links(page, search_query)
             if cards:
                 break
@@ -266,10 +271,17 @@ async def player_context(message: str, client) -> str:
             errors.append(type(exc).__name__)
 
     if not cards:
-        context = (
-            "ДАННЫЕ RENDERZ: по запросу «" + query + "» карточка не найдена в публичном списке. "
-            "Не выдумывай OVR, статы, ранг или цену. Уточни латинское написание имени либо версию карточки."
-        )
+        if successful_fetch:
+            context = (
+                "ДАННЫЕ RENDERZ: по запросу «" + query + "» карточка не найдена в публичном списке. "
+                "Не выдумывай OVR, статы, ранг или цену. Уточни латинское написание имени либо версию карточки."
+            )
+        else:
+            context = (
+                "ДАННЫЕ RENDERZ: публичные страницы сейчас недоступны"
+                + (" (" + ", ".join(errors[:3]) + ")" if errors else "")
+                + ". Не выдумывай OVR, статы, ранг или цену; сообщи, что источник временно не ответил."
+            )
         async with _cache_lock:
             _cache[cache_key] = (time.monotonic(), context)
         return context
