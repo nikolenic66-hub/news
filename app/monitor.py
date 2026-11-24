@@ -7,6 +7,7 @@ import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+from urllib.parse import quote_plus
 
 from .storage import (
     get_recent_intel,
@@ -19,8 +20,10 @@ log = logging.getLogger("vasek.monitor")
 
 PROMO_CHECK_SECONDS = 8640  # 10 checks per day
 NEWS_CHECK_SECONDS = 900  # refresh recent game news every 15 minutes
-ON_DEMAND_REFRESH_SECONDS = 300  # refresh once per 5 minutes when a player asks
+ON_DEMAND_REFRESH_SECONDS = 300  # refresh general feeds once per 5 minutes
+QUESTION_REFRESH_SECONDS = 90  # question-specific Google News lookup
 _last_on_demand_refresh = 0.0
+_last_question_refresh = 0.0
 REQUEST_HEADERS = {
     "User-Agent": "FC-Mate/1.0 (+FC Mobile community news monitor)",
     "Accept": "text/html,application/rss+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -251,23 +254,49 @@ async def monitor_loop(client, send_alert):
 
 
 async def build_intel_context(query, client=None):
-    global _last_on_demand_refresh
-    if not re.search(
+    global _last_on_demand_refresh, _last_question_refresh
+    is_game_query = bool(re.search(
         r"fc\s*mobile|фк\s*мобайл|промокод|\bкод\b|карточк|овр|состав|"
-        r"событи|обновлени|патч|тактик|мета|игрок|награ|магазин|обмен",
+        r"событи|обновлени|патч|тактик|мета|игрок|награ|магазин|обмен|"
+        r"что сейчас|сегодня|последн|свеже|актуальн|какой ивент|какое событие|новый ивент|новые карты",
         query or "",
         re.IGNORECASE,
-    ):
+    ))
+    if not is_game_query:
         return ""
-    # Do not rely only on whatever happened to be in SQLite when the bot started.
-    # A direct game question triggers a fresh fetch, rate-limited process-wide.
     now = time.monotonic()
+    # Refresh general official/community feeds periodically, including on demand.
     if client is not None and now - _last_on_demand_refresh >= ON_DEMAND_REFRESH_SECONDS:
         _last_on_demand_refresh = now
         try:
             await check_news_once(client)
         except Exception:
             log.exception("On-demand FC Mobile refresh failed")
+    # Also run a query-specific Google News RSS search so a question about a
+    # particular event/player/update is not limited to the static feed topics.
+    if client is not None and now - _last_question_refresh >= QUESTION_REFRESH_SECONDS:
+        _last_question_refresh = now
+        search_terms = re.sub(r"[^\w\s-]", " ", query or "", flags=re.UNICODE)
+        search_terms = re.sub(r"\s+", " ", search_terms).strip()[:100]
+        if search_terms:
+            search_url = (
+                "https://news.google.com/rss/search?q="
+                + quote_plus("FC Mobile " + search_terms + " when:14d")
+                + "&hl=en-US&gl=US&ceid=US:en"
+            )
+            try:
+                feed = await _get_text(client, search_url)
+                current_time = datetime.now(timezone.utc)
+                for entry in parse_rss(feed):
+                    published = _parse_date(entry.get("published"))
+                    if not published or not (-6 * 3600 <= (current_time - published).total_seconds() <= 14 * 24 * 3600):
+                        continue
+                    await save_intel_item(
+                        "question_search", entry["url"], entry["title"],
+                        entry["summary"], entry["url"], entry["source"], entry["published"],
+                    )
+            except Exception:
+                log.exception("Question-specific FC Mobile news search failed")
     news = await get_recent_intel(20)
     codes = await get_recent_promo_codes(8)
     current = datetime.now(timezone.utc)
