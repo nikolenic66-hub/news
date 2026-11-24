@@ -1,4 +1,7 @@
-import asyncio,random,time,logging,sys
+import asyncio,random,time,logging,sys,faulthandler
+faulthandler.enable(file=sys.stderr, all_threads=True)
+# If a dependency import stalls, emit its live Python stack every 10 seconds.
+faulthandler.dump_traceback_later(10, repeat=True, file=sys.stderr)
 logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(name)s: %(message)s',stream=sys.stdout,force=True)
 log=logging.getLogger('fc-mate-startup')
 log.info('Python entrypoint reached; imports are starting')
