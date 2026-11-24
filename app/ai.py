@@ -50,7 +50,7 @@ async def _completion(messages, temperature=0.8, max_tokens=450, model=None):
 
 
 async def reply(messages, persona, image_data=None, image_mime='image/jpeg'):
-    system = SYSTEM_PROMPT.format(persona=persona or "стандартный FC Mate")
+    system = SYSTEM_PROMPT.format(persona=persona or "стандартный стиль Васька")
     request_messages = [{"role": "system", "content": system}, *messages]
     model = GROQ_MODEL
     if image_data:
