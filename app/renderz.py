@@ -68,18 +68,36 @@ def _parse_html(source: str) -> _PageText:
     return parser
 
 
+def _normalise_search_text(value: str) -> str:
+    """Normalise accents, punctuation and case before comparing player names."""
+    import unicodedata
+
+    value = unicodedata.normalize("NFKD", value or "")
+    value = "".join(char for char in value if not unicodedata.combining(char))
+    return value.casefold().replace("’", "'").replace(chr(96), "'")
+
+
+def _search_tokens(value: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", _normalise_search_text(value))
+
+
 def _player_links(source: str, query: str) -> list[dict]:
     parser = _parse_html(source)
-    query_words = [w.casefold() for w in re.findall(r"[A-Za-zÀ-ÿ'-]+", query) if len(w) > 1]
     requested_ovr_match = re.search(r"\b(\d{2,3})\b", query)
     requested_ovr = int(requested_ovr_match.group(1)) if requested_ovr_match else None
+    query_tokens = [token for token in _search_tokens(query) if not token.isdigit()]
+    # Require the complete player name, not a coincidental substring match.
+    if not query_tokens:
+        return []
+
     found = []
     seen = set()
     for href, label in parser.links:
         if not re.match(r"^/player/[A-Za-z0-9_-]+", href):
             continue
         full = urljoin(BASE_URL, href)
-        if query_words and not any(w in label.casefold() for w in query_words):
+        label_tokens = _search_tokens(label)
+        if not all(token in label_tokens for token in query_tokens):
             continue
         if full in seen:
             existing = next((item for item in found if item["url"] == full), None)
@@ -87,8 +105,7 @@ def _player_links(source: str, query: str) -> list[dict]:
             if existing and duplicate_price and "market_price" not in existing:
                 existing["market_price"] = duplicate_price.group(1).replace(" ", "")
             continue
-        # RenderZ's public player list exposes OVR and grouped stats in the
-        # anchor's visible text. Do not invent fields missing from the page.
+        # Parse only values visibly present in RenderZ's public HTML.
         match = re.search(r"\b(\d{2,3})\s+(GK|CB|LB|RB|LWB|RWB|CDM|CM|CAM|LM|RM|LW|RW|CF|ST)\b", label, re.I)
         if not match:
             continue
@@ -117,7 +134,6 @@ def _player_links(source: str, query: str) -> list[dict]:
         seen.add(full)
         found.append(item)
     return found[:MAX_RESULTS]
-
 
 def _detail_fields(source: str) -> dict:
     parser = _parse_html(source)
@@ -201,7 +217,7 @@ def _format_card(card: dict, detail: dict | None = None) -> str:
 def _extract_search_query(message: str) -> str:
     value = re.sub(r"@\w+", " ", message or "")
     value = re.sub(
-        r"(?i)\b(найди|покажи|скажи|расскажи|кто|такой|это|мне|или|что|за|лучше|какой|какая|какое|сколько|сравни|карточка|карточку|карты|карта|игрок|игрока|овр|ovr|рейтинг|статы|характеристики|цена|стоит|сейчас|у|на|в|по|для|fc\s*mobile|fcm|фкм|фк\s*мобайл)\b",
+        r"(?i)\b(найди|покажи|скажи|расскажи|кто|такой|это|мне|или|и|что|за|лучше|какой|какая|какое|сколько|сравни|карточка|карточку|карты|карта|игрок|игрока|овр|ovr|рейтинг|статы|характеристики|цена|стоит|сейчас|у|на|в|по|для|fc\s*mobile|fcm|фкм|фк\s*мобайл|player|players|card|cards|stats|statistics|rating|overall|price|market|rank|training|compare|versus|vs|who|what|is|the|of|for|in|a|an)\b",
         " ", value,
     )
     value = re.sub(r"[^\w\s'-]", " ", value)
@@ -218,11 +234,12 @@ def is_player_data_question(message: str) -> bool:
     text = (message or "").casefold()
     intent = re.search(
         r"(овр|\bovr\b|карточ|игрок|стат[ыи]|характеристик|ранг|прокач|трениров|цена|стоимост|сравни|лучше|"
+        r"\bplayer\b|\bcards?\b|\bstats?\b|\bstatistics\b|\brating\b|\boverall\b|\bprice\b|\bmarket\b|\brank\b|\btraining\b|\bcompare\b|"
         r"месси|роналд|холанд|мбаппе|беллингем|винисиус|салах|кейн|ямал|неймар|эссьен|руни|фердинанд|"
         r"\bmessi\b|\bronald[o]?\b|\bhaaland\b|\bmbappe\b|\bbellingham\b|"
         r"\bvinicius\b|\bsalah\b|\bkane\b|\byamal\b|\bneymar\b|"
         r"\bde bruyne\b|\brodri\b|\bvan dijk\b|\bessien\b|\brooney\b|"
-        r"\bferdinand\b|\bkaka\b|\beto'o\b|\bribery\b|\blahm\b|\bgarrincha\b)",
+        r"\bferdinand\b|\bkaka\b|\beto'o\b|\bribery\b|\blahm\b|\bgarrincha\b|\bkvaratskhelia\b|\blampard\b|\bgerrard\b|\bzidane\b)",
         text,
     )
     has_card_rating = bool(re.search(r"\b(?:9[0-9]|1[0-3][0-9])\b", text))
@@ -254,9 +271,16 @@ async def player_context(message: str, client) -> str:
         return ""
     aliases = {
         "месси": "Messi", "роналду": "Ronaldo", "роналдо": "Ronaldo",
-        "холанд": "Haaland", "холанда": "Haaland", "мбаппе": "Mbappe",
-        "беллингем": "Bellingham", "винисиус": "Vinicius",
+        "холанд": "Haaland", "холанда": "Haaland", "холанду": "Haaland",
+        "мбаппе": "Mbappe", "беллингем": "Bellingham",
+        "винисиус": "Vinicius", "винисиуса": "Vinicius",
         "салах": "Salah", "кейна": "Kane", "кейну": "Kane",
+        "неймар": "Neymar", "неймара": "Neymar", "эссьен": "Essien",
+        "руни": "Rooney", "фердинанд": "Ferdinand",
+        "ван": "van", "дэйк": "Dijk", "де": "de", "брюйне": "Bruyne",
+        "кварацхелия": "Kvaratskhelia", "кварацхелии": "Kvaratskhelia",
+        "лэмпард": "Lampard", "джеррард": "Gerrard", "зидан": "Zidane",
+        "кака": "Kaka", "лам": "Lahm", "рибери": "Ribery",
     }
     query_parts = query.split()
     search_parts = [aliases.get(part.casefold(), part) for part in query_parts]
