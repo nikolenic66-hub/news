@@ -108,6 +108,7 @@ def message_mentions_bot(message, text):
 
 async def handle_command(message, command, args):
     chat_id = message["chat"]["id"]
+    user = message.get("from") or {}
     group_admin_commands = {
         "on", "off", "activity", "persona", "memory", "forget", "clear",
         "poll",
