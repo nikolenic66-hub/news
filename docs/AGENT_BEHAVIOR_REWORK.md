@@ -80,3 +80,14 @@ No code or data was copied from the reviewed third-party bots. The implementatio
 Added regression coverage for exact token matching, multi-word and accented names, transliteration, OVR-only requests and English player-data phrasing. This increment does not implement comparison workflows or squad optimization.
 
 The public list uses a `page=N` pagination link, which was confirmed against the current RenderZ player-list pages. The bot now scans at most eight public pages per requested player and stops on the first page with matching cards. The old speculative `search=` and `q=` URL guesses were removed. Multi-player query connectors are preserved and each requested name is searched independently; the context marks incomplete matches so the model must not fabricate a comparison.
+
+
+## Persona style increment — sarcasm, profanity and punchy banter (2026-11-24)
+
+- Expanded the default voice beyond mild banter: contextual sarcasm, dry humor, colloquial Russian and profanity are allowed and encouraged when emotionally appropriate.
+- Profanity intensity varies by context; it is not inserted into every sentence. Avoid repetitive swear-word patterns and generic insult templates.
+- Joke about game situations, EA decisions, bugs, luck, bad tactics, or the bot's own mistake—not users' vulnerabilities or personal traits.
+- Serious, safety-sensitive, personal, or technical topics prioritize clear help over comedy.
+- Added short example dialogues as tone anchors, explicitly not fixed templates.
+- The character is a speaking style, not a fake biography or claim of a real FC Mobile account.
+- Added prompt regression assertions for contextual profanity, tone controls, serious-topic fallback, and examples.
