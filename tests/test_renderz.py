@@ -1,5 +1,7 @@
 import unittest
 
+import app.renderz as renderz
+
 from app.renderz import (
     _detail_fields,
     _extract_search_query,
@@ -138,6 +140,34 @@ class RenderZParsingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("не подтверждённая карточка", result)
         self.assertFalse(is_verified_player_context(result))
 
+
+
+    async def test_multi_player_search_fetches_each_list_page_once(self):
+        from unittest.mock import AsyncMock, patch
+
+        query = "messi vs ronaldo"
+        renderz._cache.pop(query, None)
+        list_html = """
+        <a href="/player/1-messi">115 ST Lionel Messi 150 PAC</a>
+        <a href="/player/2-ronaldo">116 ST Cristiano Ronaldo 151 PAC</a>
+        """
+        detail_html = "<html><body>Player detail</body></html>"
+        fetch_page = AsyncMock(side_effect=[list_html, detail_html, detail_html])
+
+        try:
+            with patch("app.renderz._get_page", fetch_page):
+                result = await renderz.player_context(
+                    "Compare Messi vs Ronaldo", object()
+                )
+
+            self.assertTrue(is_verified_player_context(result))
+            self.assertIn("Lionel Messi", result)
+            self.assertIn("Cristiano Ronaldo", result)
+            # One shared list-page request plus one detail request per card.
+            self.assertEqual(fetch_page.await_count, 3)
+            self.assertEqual(fetch_page.await_args_list[0].args[1], renderz.PLAYERS_URL)
+        finally:
+            renderz._cache.pop(query, None)
 
 
 if __name__ == "__main__":
