@@ -17,6 +17,13 @@ class GroupAgentPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("не попал в доступную историю", SYSTEM_PROMPT)
         self.assertIn("не придумывай пропущенные реплики", SYSTEM_PROMPT)
 
+    def test_persona_has_contextual_sarcasm_and_profanity_rules(self):
+        self.assertIn("Мат — инструмент эмоции", SYSTEM_PROMPT)
+        self.assertIn("не превращай обычный чат в непрерывный поток мата", SYSTEM_PROMPT)
+        self.assertIn("Если вопрос серьёзный", SYSTEM_PROMPT)
+        self.assertIn("Примеры тона (ориентир, не шаблоны для копирования)", SYSTEM_PROMPT)
+        self.assertIn("не заявляй, что у тебя есть реальный игровой аккаунт", SYSTEM_PROMPT)
+
     async def test_group_memory_summary_rejects_untrusted_instructions(self):
         messages = [
             {"role": "user", "content": "Игрок А: Люблю H2H и Реал"},
