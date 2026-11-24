@@ -98,7 +98,7 @@ def message_mentions_bot(message, text):
     needle = "@" + BOT_USERNAME.lower()
     if needle in text.lower():
         return True
-    for entity in message.get("entities") or []:
+    for entity in (message.get("entities") or []) + (message.get("caption_entities") or []):
         if entity.get("type") == "mention":
             offset, length = entity.get("offset", 0), entity.get("length", 0)
             if text[offset:offset + length].lower() == needle:
@@ -124,7 +124,7 @@ async def handle_command(message, command, args):
         return
 
     if command == "start":
-        await send(chat_id, f"Я {BOT_NAME} — ИИ-игрок в чате FC Mobile. Обсуждаю карточки, составы и тактики, могу пошутить и иногда сам вклиниться в тему.\n/help", message.get("message_id"))
+        await send(chat_id, f"Я {BOT_NAME} — свой человек в чате FC Mobile. Обсуждаю карточки, составы и тактики, могу пошутить и иногда сам вклиниться в тему.\n/help", message.get("message_id"))
     elif command == "help":
         await send(chat_id, "/status — настройки чата\n/on, /off — включить или выключить меня (админы)\n/activity 0-50 — шанс моей инициативы (админы)\n/persona текст — мой характер (админы)\n/memory — долговременная память (админы)\n/forget — очистить только память (админы)\n/clear — очистить историю и память (админы)\n/stats — твоя статистика в чате\n/top — рейтинг активности\n/poll вопрос | вариант 1 | вариант 2 — опрос (админ)\n\nУпомяни меня или ответь на моё сообщение, чтобы вызвать меня напрямую.", message.get("message_id"))
     elif command == "stats":
@@ -147,7 +147,7 @@ async def handle_command(message, command, args):
     elif command == "status":
         settings = await get_settings(chat_id)
         chance = REPLY_PROBABILITY if settings["activity"] is None else settings["activity"]
-        await send(chat_id, f"FC Mate: {'активен' if settings['enabled'] else 'выключен'}\nИнициатива: {chance*100:.0f}%\nЗапомненных участников: {await user_count(chat_id)}", message.get("message_id"))
+        await send(chat_id, f"{BOT_NAME}: {'активен' if settings['enabled'] else 'выключен'}\nИнициатива: {chance*100:.0f}%\nЗапомненных участников: {await user_count(chat_id)}", message.get("message_id"))
     elif command in ("on", "off"):
         if not await is_admin(message):
             await send(chat_id, "Только администраторы группы.", message.get("message_id")); return
