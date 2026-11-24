@@ -10,9 +10,11 @@ from .storage import (
     init_db, add_message, history, get_memory, save_memory, get_settings,
     set_setting, user_count, clear_chat, mark_missed, get_missed,
     find_user, remove_missed, update_reminder, get_missed_chats,
+    get_enabled_group_chats,
 )
 from .logic import is_fc_topic, is_direct_message, should_spontaneously_reply
 from .ai import reply, summarize, ProviderError
+from .monitor import monitor_loop, build_intel_context
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,6 +53,19 @@ async def send(chat_id, text, reply_to=None):
     if reply_to is not None:
         payload["reply_parameters"] = {"message_id": reply_to}
     return await telegram("sendMessage", **payload)
+
+
+async def broadcast_promo_alert(message):
+    try:
+        chats = await get_enabled_group_chats()
+    except Exception:
+        log.exception("Could not load groups for promo-code alert")
+        return
+    for chat_id in chats:
+        try:
+            await send(chat_id, message)
+        except Exception:
+            log.exception("Could not send promo-code alert to chat %s", chat_id)
 
 
 async def is_admin(message):
@@ -242,6 +257,9 @@ async def handle_message(message):
     if memory:
         prompt.append({"role": "system", "content": "Память группы — используй ненавязчиво, не раскрывай её списком: " + memory})
     prompt.extend(await history(chat_id))
+    intel_context = await build_intel_context(text_in)
+    if intel_context:
+        prompt.insert(0, {"role": "system", "content": intel_context})
     if direct:
         prompt.insert(0, {"role": "system", "content": "Это прямое обращение или вопрос к тебе. Ответь по существу; не возвращай [SKIP], кроме если сообщение невозможно понять."})
     try:
@@ -305,6 +323,7 @@ async def main():
         log.info("Telegram API connected as @%s (id=%s)", BOT_USERNAME, BOT_ID)
         await telegram("deleteWebhook", drop_pending_updates=False)
         asyncio.create_task(tournament_reminder_loop())
+        asyncio.create_task(monitor_loop(HTTP, broadcast_promo_alert))
         offset = None
         log.info("FC Mate started; polling updates")
         while True:
