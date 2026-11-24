@@ -47,10 +47,13 @@ def _bounded_messages(messages):
     for item in recent:
         content = item["content"]
         if isinstance(content, str):
-            # Memory summarization is a single long user prompt; preserve more
-            # there while normal chat remains intentionally compact.
-            cap = 2600 if len(recent) <= 2 else (650 if item is recent[-1] else 450)
-            content = content[:cap]
+            # Memory summarization is a single long prompt: preserve its
+            # instructions at the start and the newest messages at the end.
+            if len(recent) <= 2 and len(content) > 5200:
+                content = content[:1800] + "\\n[контекст сокращён]\\n" + content[-3400:]
+            else:
+                cap = 650 if item is recent[-1] else 450
+                content = content[:cap]
         elif isinstance(content, list):
             # Preserve image parts; only trim their associated text content.
             parts = []
