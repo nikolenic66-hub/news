@@ -1,16 +1,20 @@
 import asyncio
+import base64
 import logging
+import mimetypes
 import random
 import time
 
 import httpx
 
-from .config import BOT_TOKEN, GROQ_API_KEY, GROQ_API_URL, GROQ_MODEL, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY
+from .config import BOT_TOKEN, GROQ_API_KEY, GROQ_API_URL, GROQ_MODEL, GROQ_VISION_MODEL, BOT_NAME, PERSONA, ADMIN_IDS, REPLY_PROBABILITY
 from .storage import (
     init_db, add_message, history, get_memory, save_memory, get_settings,
     set_setting, user_count, clear_chat, mark_missed, get_missed,
     find_user, remove_missed, update_reminder, get_missed_chats,
-    get_enabled_group_chats,
+    get_enabled_group_chats, get_user_stats, get_top_users,
+    create_tournament, get_open_tournament, join_tournament,
+    tournament_participants, close_tournament,
 )
 from .logic import is_fc_topic, is_direct_message, should_spontaneously_reply
 from .ai import reply, summarize, ProviderError
@@ -207,12 +211,45 @@ async def handle_command(message, command, args):
         await send(chat_id, answer, message.get("message_id"))
 
 
+
+async def download_message_image(message):
+    """Download a Telegram photo/image document and encode it for Groq Vision."""
+    photos = message.get("photo") or []
+    document = message.get("document") or {}
+    if photos:
+        file_id = photos[-1].get("file_id")
+        mime = "image/jpeg"
+        size = photos[-1].get("file_size", 0)
+    elif document.get("mime_type", "").startswith("image/"):
+        file_id = document.get("file_id")
+        mime = document.get("mime_type") or mimetypes.guess_type(document.get("file_name", ""))[0] or "image/jpeg"
+        size = document.get("file_size", 0)
+    else:
+        return None
+    if not file_id:
+        return None
+    if size and size > 20 * 1024 * 1024:
+        raise ValueError("Изображение больше лимита 20 МБ.")
+    meta = await telegram("getFile", file_id=file_id)
+    path = meta.get("file_path")
+    if not path:
+        raise ValueError("Telegram не вернул путь к изображению.")
+    response = await HTTP.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{path}")
+    response.raise_for_status()
+    if len(response.content) > 20 * 1024 * 1024:
+        raise ValueError("Изображение больше лимита 20 МБ.")
+    return {"data": base64.b64encode(response.content).decode("ascii"), "mime": mime}
+
+
 async def handle_message(message):
     chat = message.get("chat") or {}
     chat_id = chat.get("id")
-    text_in = (message.get("text") or "").strip()
+    text_in = (message.get("text") or message.get("caption") or "").strip()
     user = message.get("from") or {}
-    if not chat_id or not text_in or user.get("is_bot") or not user.get("id"):
+    has_image = bool(message.get("photo")) or (
+        (message.get("document") or {}).get("mime_type", "").startswith("image/")
+    )
+    if not chat_id or (not text_in and not has_image) or user.get("is_bot") or not user.get("id"):
         return
     if text_in.startswith("/"):
         first, _, args = text_in.partition(" ")
@@ -226,7 +263,8 @@ async def handle_message(message):
     if not is_private and chat.get("type") not in ("group", "supergroup"):
         return
 
-    await add_message(chat_id, user["id"], user.get("username"), name, "user", f"{name}: {text_in}")
+    stored_text = text_in or ("[Отправлено изображение]" if has_image else "")
+    await add_message(chat_id, user["id"], user.get("username"), name, "user", f"{name}: {stored_text}")
     summary_counter[chat_id] = summary_counter.get(chat_id, 0) + 1
     if summary_counter[chat_id] >= 60:
         try:
@@ -249,7 +287,20 @@ async def handle_message(message):
     elif not is_private:
         chance = REPLY_PROBABILITY if settings["activity"] is None else settings["activity"]
         elapsed = now - last_spontaneous.get(chat_id, 0)
-        if not should_spontaneously_reply(text_in, chance, random.random(), elapsed):
+        # Images in an FC Mobile group are eligible for the same low-noise
+        # initiative chance; direct replies always get full image analysis.
+        eligible = has_image or is_fc_topic(text_in)
+        if not eligible or elapsed < 240 or random.random() >= chance:
+            return
+
+    image_data = None
+    if has_image:
+        try:
+            image_data = await download_message_image(message)
+        except Exception as exc:
+            log.warning("Telegram image download failed: %s", exc)
+            if direct:
+                await send(chat_id, f"Не получилось открыть изображение: {exc}", message.get("message_id"))
             return
 
     memory = await get_memory(chat_id)
@@ -257,13 +308,18 @@ async def handle_message(message):
     if memory:
         prompt.append({"role": "system", "content": "Память группы — используй ненавязчиво, не раскрывай её списком: " + memory})
     prompt.extend(await history(chat_id))
-    intel_context = await build_intel_context(text_in)
+    intel_context = await build_intel_context(text_in or ("FC Mobile: анализ изображения" if has_image else ""))
     if intel_context:
         prompt.insert(0, {"role": "system", "content": intel_context})
     if direct:
         prompt.insert(0, {"role": "system", "content": "Это прямое обращение или вопрос к тебе. Ответь по существу; не возвращай [SKIP], кроме если сообщение невозможно понять."})
     try:
-        answer = await reply(prompt, settings["persona"] or PERSONA)
+        answer = await reply(
+            prompt,
+            settings["persona"] or PERSONA,
+            image_data=image_data["data"] if image_data else None,
+            image_mime=image_data["mime"] if image_data else "image/jpeg",
+        )
         if answer:
             await send(chat_id, answer, message.get("message_id"))
             await add_message(chat_id, None, None, BOT_NAME, "assistant", answer)
