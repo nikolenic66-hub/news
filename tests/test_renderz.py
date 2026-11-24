@@ -23,7 +23,8 @@ class RenderZParsingTests(unittest.TestCase):
         self.assertEqual(cards[0]["ovr"], 124)
         self.assertEqual(cards[0]["position"], "CDM")
         self.assertEqual(cards[0]["PAC"], 147)
-        self.assertEqual(cards[0]["PHY"], 151)\n        self.assertEqual(cards[0]["market_price"], "13.3B")
+        self.assertEqual(cards[0]["PHY"], 151)
+        self.assertEqual(cards[0]["market_price"], "13.3B")
         self.assertEqual(cards[0]["url"], "https://renderz.app/player/30924202-essien")
 
     def test_search_rejects_unmatched_page_rows(self):
