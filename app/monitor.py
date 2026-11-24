@@ -303,7 +303,7 @@ async def build_intel_context(query, client=None):
     fresh_news = []
     for item in news:
         published = _parse_date(item[5])
-        if published and -6 * 3600 <= (current - published).total_seconds() <= 14 * 24 * 3600:
+        if published and -6 * 3600 <= (current - published).total_seconds() <= 7 * 24 * 3600:
             fresh_news.append(item)
     lines = [
         "АКТУАЛЬНОСТЬ: текущая дата UTC " + current.strftime("%Y-%m-%d %H:%M") + ".",
