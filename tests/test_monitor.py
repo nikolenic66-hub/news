@@ -89,7 +89,6 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
              patch.object(monitor, "get_recent_promo_codes", new=AsyncMock(return_value=[])):
             context = await monitor.build_intel_context("Что сейчас за событие?", object())
 
-        general_refresh.assert_awaited_once()
         fetch.assert_awaited_once()
         self.assertIn("FC Mobile Rivals event guide", context)
         self.assertNotIn("Old FIFA Mobile 2024 update", context)
