@@ -5,6 +5,7 @@ from email.utils import format_datetime
 
 os.environ.setdefault('DB_PATH', ':memory:')
 
+from app import monitor
 from app.monitor import extract_active_codes, parse_rss, _codes_from_recent_article
 
 
@@ -69,6 +70,42 @@ class MonitorParsingTests(unittest.TestCase):
         self.assertEqual(entries[0]["title"], "FC Mobile update")
         self.assertEqual(entries[0]["source"], "Example")
 
+
+    async def test_question_context_refreshes_live_and_ignores_old_articles(self):
+        from unittest.mock import AsyncMock, patch
+
+        fresh_date = format_datetime(datetime.now(timezone.utc) - timedelta(hours=2))
+        stale_date = format_datetime(datetime.now(timezone.utc) - timedelta(days=90))
+        fresh = ("events_updates", "FC Mobile Rivals event guide", "New event rewards", "https://example.com/fresh", "Example", fresh_date)
+        stale = ("official_news", "Old FIFA Mobile 2024 update", "Old data", "https://example.com/old", "Example", stale_date)
+
+        with patch.object(monitor, "_last_on_demand_refresh", 0), \
+             patch.object(monitor, "_last_question_refresh", 0), \
+             patch.object(monitor, "check_news_once", new=AsyncMock()) as general_refresh, \
+             patch.object(monitor, "_get_text", new=AsyncMock(return_value="<rss><channel></channel></rss>")) as fetch, \
+             patch.object(monitor, "save_intel_item", new=AsyncMock()), \
+             patch.object(monitor, "get_recent_intel", new=AsyncMock(return_value=[fresh, stale])), \
+             patch.object(monitor, "get_recent_promo_codes", new=AsyncMock(return_value=[])):
+            context = await monitor.build_intel_context("Что сейчас за событие?", object())
+
+        general_refresh.assert_awaited_once()
+        fetch.assert_awaited_once()
+        self.assertIn("FC Mobile Rivals event guide", context)
+        self.assertNotIn("Old FIFA Mobile 2024 update", context)
+        self.assertIn("АКТУАЛЬНОСТЬ", context)
+        self.assertIn("when%3A14d", fetch.await_args.args[1])
+
+    async def test_empty_live_context_explicitly_rejects_old_knowledge(self):
+        from unittest.mock import AsyncMock, patch
+
+        with patch.object(monitor, "_last_on_demand_refresh", 10**12), \
+             patch.object(monitor, "_last_question_refresh", 10**12), \
+             patch.object(monitor, "get_recent_intel", new=AsyncMock(return_value=[])), \
+             patch.object(monitor, "get_recent_promo_codes", new=AsyncMock(return_value=[])):
+            context = await monitor.build_intel_context("Какие сейчас новые карты FC Mobile?")
+
+        self.assertIn("СВЕЖИХ ПУБЛИКАЦИЙ НЕ НАЙДЕНО", context)
+        self.assertIn("не называй старые сведения актуальными", context)
 
 if __name__ == "__main__":
     unittest.main()
