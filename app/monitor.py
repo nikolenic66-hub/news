@@ -323,3 +323,44 @@ async def build_intel_context(query, client=None):
     else:
         lines.append("СВЕЖИХ ПУБЛИКАЦИЙ НЕ НАЙДЕНО. Не называй старые сведения актуальными; честно скажи, что свежий факт сейчас подтвердить не удалось.")
     return "\n".join(lines)[:9000]
+
+
+
+def format_news_digest(items, limit=6, now=None):
+    """Format only dated FC Mobile publications no older than seven days."""
+    now = now or datetime.now(timezone.utc)
+    lines = []
+    for item in items:
+        if len(item) < 7:
+            continue
+        kind, title, summary, url, source, published_at, fetched_at = item[:7]
+        published = _parse_date(published_at)
+        if not published:
+            continue
+        age = (now - published).total_seconds()
+        if age < -6 * 3600 or age > 7 * 24 * 3600:
+            continue
+        stamp = published.strftime("%d.%m %H:%M UTC")
+        lines.append(f"• {title} — {source}, {stamp}\n{url}")
+        if len(lines) >= max(1, min(10, int(limit))):
+            break
+    return "\n\n".join(lines) if lines else "Свежих публикаций за последние 7 дней пока нет. Не буду подсовывать старые новости."
+
+
+def format_sources_status(items, limit=8):
+    """Show the latest stored source records and their publication/fetch times."""
+    seen = set()
+    lines = []
+    for item in items:
+        if len(item) < 7:
+            continue
+        kind, title, summary, url, source, published_at, fetched_at = item[:7]
+        key = (kind, source)
+        if key in seen:
+            continue
+        seen.add(key)
+        label = "EA / официальный поиск" if kind == "official_news" and "ea" in (source or "").lower() else "сообщество / вторичный"
+        lines.append(f"• {source} ({label})\nПоследняя публикация: {published_at or 'дата неизвестна'}\nПолучено ботом: {fetched_at} UTC")
+        if len(lines) >= max(1, min(12, int(limit))):
+            break
+    return "\n\n".join(lines) if lines else "Источники пока не прислали ни одной записи."
