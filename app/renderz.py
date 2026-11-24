@@ -76,12 +76,16 @@ def _player_links(source: str, query: str) -> list[dict]:
         if not re.match(r"^/player/[A-Za-z0-9_-]+", href):
             continue
         full = urljoin(BASE_URL, href)
+        if query_words and not any(w in label.casefold() for w in query_words):
+            continue
         if full in seen:
+            existing = next((item for item in found if item["url"] == full), None)
+            duplicate_price = re.search(r"\b(\d+(?:\.\d+)?\s*[KMB])\b", label, re.I)
+            if existing and duplicate_price and "market_price" not in existing:
+                existing["market_price"] = duplicate_price.group(1).replace(" ", "")
             continue
         # RenderZ's public player list exposes OVR and grouped stats in the
         # anchor's visible text. Do not invent fields missing from the page.
-        if query_words and not any(w in label.casefold() for w in query_words):
-            continue
         match = re.search(r"\b(\d{2,3})\s+(GK|CB|LB|RB|LWB|RWB|CDM|CM|CAM|LM|RM|LW|RW|CF|ST)\b", label, re.I)
         if not match:
             continue
