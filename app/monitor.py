@@ -144,7 +144,9 @@ def _is_disallowed_source(entry):
     source = (entry.get("source") or "").lower()
     source_url = (entry.get("source_url") or "").lower()
     article_url = (entry.get("url") or "").lower()
-    return "renderz" in source or "renderz.app" in source_url or "renderz.app" in article_url
+    restricted_markers = ("renderz", "fcmhub", "fc mobile forum", "fcmobileforum", "fcindex")
+    combined = " ".join((source, source_url, article_url))
+    return any(marker in combined for marker in restricted_markers)
 
 
 def _codes_from_recent_article(entry):
