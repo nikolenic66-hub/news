@@ -1,9 +1,11 @@
 import os
 import unittest
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 
 os.environ.setdefault('DB_PATH', ':memory:')
 
-from app.monitor import extract_active_codes, parse_rss
+from app.monitor import extract_active_codes, parse_rss, _codes_from_recent_article
 
 
 class MonitorParsingTests(unittest.TestCase):
@@ -23,6 +25,33 @@ class MonitorParsingTests(unittest.TestCase):
     def test_does_not_guess_without_active_section(self):
         self.assertEqual(
             extract_active_codes("<p>New code: COMINGHOME</p>"),
+            [],
+        )
+
+    def test_promo_code_article_must_be_recent(self):
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(hours=3))
+        stale = format_datetime(datetime.now(timezone.utc) - timedelta(days=30))
+        base = {
+            "title": "New FC Mobile redeem code: WINTER2026",
+            "summary": "Redeem code WINTER2026 for rewards",
+        }
+        self.assertEqual(
+            _codes_from_recent_article({**base, "published": recent}),
+            ["WINTER2026"],
+        )
+        self.assertEqual(
+            _codes_from_recent_article({**base, "published": stale}),
+            [],
+        )
+
+    def test_promo_code_requires_explicit_new_code_language(self):
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(hours=1))
+        self.assertEqual(
+            _codes_from_recent_article({
+                "title": "FC Mobile gameplay update WINTER2026",
+                "summary": "A new season is coming",
+                "published": recent,
+            }),
             [],
         )
 
