@@ -47,3 +47,11 @@ No foreign runtime, database, framework, API key, paid service, or private endpo
 ## Validation
 
 The added tests check the group persona guardrails and the safe-memory summarization contract. GitHub Actions must pass before considering this behavior upgrade verified. A CI pass does not prove Amvera deployment or real Groq response quality; those require a live bot check.
+
+
+## Follow-up continuity increment (2026-11-24)
+
+- The handler recognizes a narrow set of short follow-up openings (for example, “а почему?”, “а если?”, “и что дальше?”) only when the immediately preceding stored message is the assistant and the bot itself replied within the last 120 seconds.
+- The follow-up is treated as a direct turn, so it bypasses the ordinary spontaneous-reply lottery and the short direct-message cooldown.
+- The bot reply timestamp is held in process memory; after a restart, explicit Telegram replies/name calls still work, while implicit follow-up routing resumes after the next bot response.
+- This is intentionally not a general “answer every short message” rule. Tests cover positive cases, unrelated messages, stale windows, and commands.
