@@ -232,7 +232,7 @@ def _format_card(card: dict, detail: dict | None = None) -> str:
 def _extract_search_query(message: str) -> str:
     value = re.sub(r"@\w+", " ", message or "")
     value = re.sub(
-        r"(?i)\b(найди|покажи|скажи|расскажи|кто|такой|это|мне|или|и|что|за|лучше|какой|какая|какое|сколько|сравни|карточка|карточку|карты|карта|игрок|игрока|овр|ovr|рейтинг|статы|характеристики|цена|стоит|сейчас|у|на|в|по|для|fc\s*mobile|fcm|фкм|фк\s*мобайл|player|players|card|cards|stats|statistics|rating|overall|price|market|rank|training|compare|versus|vs|who|what|is|the|of|for|in|a|an)\b",
+        r"(?i)\b(найди|покажи|скажи|расскажи|кто|такой|это|мне|что|за|лучше|какой|какая|какое|сколько|сравни|карточка|карточку|карты|карта|игрок|игрока|овр|ovr|рейтинг|статы|характеристики|цена|стоит|сейчас|у|на|в|по|для|fc\s*mobile|fcm|фкм|фк\s*мобайл|player|players|card|cards|stats|statistics|rating|overall|price|market|rank|training|compare|versus|vs|who|what|is|the|of|for|in|a|an)\b",
         " ", value,
     )
     value = re.sub(r"[^\w\s'-]", " ", value)
@@ -297,12 +297,21 @@ async def player_context(message: str, client) -> str:
         "лэмпард": "Lampard", "джеррард": "Gerrard", "зидан": "Zidane",
         "кака": "Kaka", "лам": "Lahm", "рибери": "Ribery",
     }
-    query_parts = query.split()
-    search_parts = [
-        aliases.get(part.casefold(), _transliterate_name_token(part))
-        for part in query_parts
+    raw_queries = [
+        part.strip() for part in re.split(r"(?i)\b(?:и|или|vs|versus|против|and|or)\b", query)
+        if _search_tokens(part)
     ]
-    search_query = " ".join(search_parts)
+    search_queries = []
+    for raw_query in raw_queries:
+        parts = raw_query.split()
+        search_parts = [
+            aliases.get(part.casefold(), _transliterate_name_token(part))
+            for part in parts
+        ]
+        search_queries.append(" ".join(search_parts))
+    if not search_queries:
+        return ""
+    search_query = " | ".join(search_queries)
     cache_key = query.casefold()
     async with _cache_lock:
         cached = _cache.get(cache_key)
@@ -315,21 +324,26 @@ async def player_context(message: str, client) -> str:
     # The search parameter is a normal page URL; results are accepted only when
     # the returned visible card labels actually match the requested words.
     errors = []
-    cards = []
+    cards_by_url = {}
     successful_fetch = False
-    for url in (
-        f"{PLAYERS_URL}?search={quote_plus(search_query)}",
-        f"{PLAYERS_URL}?q={quote_plus(search_query)}",
-        PLAYERS_URL,
-    ):
-        try:
-            page = await _get_page(client, url)
-            successful_fetch = True
-            cards = _player_links(page, search_query)
-            if cards:
-                break
-        except Exception as exc:
-            errors.append(type(exc).__name__)
+    for player_query in search_queries:
+        matched = []
+        for url in (
+            f"{PLAYERS_URL}?search={quote_plus(player_query)}",
+            f"{PLAYERS_URL}?q={quote_plus(player_query)}",
+            PLAYERS_URL,
+        ):
+            try:
+                page = await _get_page(client, url)
+                successful_fetch = True
+                matched = _player_links(page, player_query)
+                if matched:
+                    break
+            except Exception as exc:
+                errors.append(type(exc).__name__)
+        for card in matched:
+            cards_by_url.setdefault(card["url"], card)
+    cards = list(cards_by_url.values())[:MAX_RESULTS]
 
     if not cards:
         if successful_fetch:
@@ -367,6 +381,10 @@ async def player_context(message: str, client) -> str:
         + "). Это данные конкретных версий карт, не общий OVR состава. "
         "Используй только перечисленные поля; если запрошенное поле отсутствует, прямо скажи об этом. "
         "Не достраивай ранг, тренировку или рыночную цену догадкой.\n"
+        + (
+            "\nНе все запрошенные имена удалось подтвердить. Не сравнивай и не додумывай отсутствующие карточки."
+            if len(search_queries) > len(cards) else ""
+        )
         + "\n".join(blocks)
     )
     async with _cache_lock:
