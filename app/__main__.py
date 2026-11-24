@@ -16,7 +16,7 @@ from .storage import (
 from .logic import is_fc_topic, is_bot_name_call, is_recent_bot_followup, should_spontaneously_reply
 from .ai import reply, summarize, ProviderError
 from .monitor import monitor_loop, build_intel_context, format_news_digest, format_sources_status
-from .renderz import player_context, is_player_data_question
+from .renderz import player_context, is_player_data_question, is_verified_player_context
 
 logging.basicConfig(
     level=logging.INFO,
@@ -354,7 +354,7 @@ async def handle_message(message):
         except Exception:
             log.exception("RenderZ player lookup failed")
             card_context = ""
-        if not card_context.startswith("ПРОВЕРЕННЫЕ ДАННЫЕ КАРТОЧЕК RENDERZ"):
+        if not is_verified_player_context(card_context):
             if "не найдена" in card_context:
                 failure = "Поискал в RenderZ, но подходящую карточку не нашёл. Не буду придумывать OVR и статы. Напиши имя латиницей или уточни OVR/программу карты."
             elif "недоступны" in card_context or not card_context:
