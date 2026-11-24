@@ -206,6 +206,11 @@ def _extract_search_query(message: str) -> str:
     return value[:80]
 
 
+def is_verified_player_context(context: str) -> bool:
+    """True only when RenderZ returned at least one parsed player card."""
+    return bool((context or "").startswith("ПРОВЕРЕННЫЕ ДАННЫЕ КАРТОЧЕК RENDERZ"))
+
+
 def is_player_data_question(message: str) -> bool:
     text = (message or "").casefold()
     intent = re.search(
