@@ -100,7 +100,7 @@ async def get_recent_intel(limit=8):
 
 async def get_recent_promo_codes(limit=8):
  async with aiosqlite.connect(DB_PATH, timeout=30) as db:
-  cur=await db.execute("SELECT code,reward,source,source_url,first_seen FROM promo_codes WHERE first_seen >= datetime('now','-30 days') ORDER BY first_seen DESC LIMIT ?",(max(1,min(20,int(limit))),))
+  cur=await db.execute("SELECT code,reward,source,source_url,last_seen FROM promo_codes WHERE last_seen >= datetime('now','-48 hours') ORDER BY last_seen DESC LIMIT ?",(max(1,min(20,int(limit))),))
   return await cur.fetchall()
 
 async def get_enabled_group_chats():
