@@ -250,7 +250,7 @@ async def secondary_player_search(message: str, client) -> str:
     query = _extract_search_query(message)
     if len(query) < 2:
         return ""
-    terms = re.sub(r"[^\\w\\s'-]", " ", query)
+    terms = re.sub(r"[^\w\s'-]", " ", query)
     terms = " ".join(terms.split())[:70]
     url = "https://www.bing.com/news/search?q=" + quote_plus("FC Mobile player card " + terms) + "&format=rss"
     try:
@@ -276,7 +276,7 @@ async def secondary_player_search(message: str, client) -> str:
         return (
             "ВТОРИЧНЫЙ ПОИСК ПО ПУБЛИКАЦИЯМ (Bing News RSS). Это обсуждения/публикации, "
             "а не подтверждённая карточка базы RenderZ. Не выводи из них точные OVR или статы без "
-            "открытой и проверенной карточки. Ссылки для дальнейшей проверки:\\n"
+            "открытой и проверенной карточки. Ссылки для дальнейшей проверки:\n"
             + "\\n".join(items)
         )
     except Exception as exc:
