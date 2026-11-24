@@ -27,6 +27,7 @@ if __import__("os").getenv("DATABASE_URL"):
 bot=Bot(BOT_TOKEN);dp=Dispatcher()
 last_spontaneous={};last_direct={};summary_counter={}
 BOT_USERNAME=None
+BOT_ID=None
 TOURNAMENT_COOLDOWN=45*60
 async def is_admin(message:Message):
  if not message.from_user:return False
@@ -134,7 +135,7 @@ async def group_message(message:Message):
   except Exception:log.exception("Memory summary refresh failed")
   summary_counter[message.chat.id]=0
  if not settings["enabled"]:return
- direct=is_direct_message(text_in,BOT_USERNAME,bool(message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.id==bot_user.id))
+ direct=is_direct_message(text_in,BOT_USERNAME,bool(message.reply_to_message and message.reply_to_message.from_user and message.reply_to_message.from_user.id==BOT_ID))
  if direct:
   if now-last_direct.get(message.chat.id,0)<12:return
   last_direct[message.chat.id]=now
@@ -180,13 +181,14 @@ async def tournament_reminder_loop():
     log.exception("Tournament reminder failed for chat %s",chat_id)
 
 async def main():
- global BOT_USERNAME
+ global BOT_USERNAME,BOT_ID
  log.info("Startup: preparing SQLite")
  await init_db()
  log.info("Startup: SQLite is ready")
  log.info("Startup: validating Telegram token with getMe")
  me=await bot.get_me()
  BOT_USERNAME=me.username
+ BOT_ID=me.id
  log.info("Startup: Telegram OK, username=@%s, id=%s",me.username,me.id)
  # Remove any stale webhook so long polling is not rejected by Telegram.
  await bot.delete_webhook(drop_pending_updates=False)
