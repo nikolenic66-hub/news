@@ -30,6 +30,14 @@ class RenderZParsingTests(unittest.TestCase):
         html = '<a href="/player/30924202-essien">124 CDM Essien 147 PAC</a>'
         self.assertEqual(_player_links(html, "Messi"), [])
 
+    def test_search_filters_exact_requested_ovr(self):
+        html = """
+        <a href="/player/1-haaland">115 ST Haaland 160 PAC 155 SHO</a>
+        <a href="/player/2-haaland">118 ST Haaland 163 PAC 159 SHO</a>
+        """
+        cards = _player_links(html, "Haaland 115")
+        self.assertEqual([card["ovr"] for card in cards], [115])
+
     def test_detail_page_reads_visible_player_fields(self):
         html = """
         <h1>Michaël Essien — 124 OVR · FC Mobile</h1>
