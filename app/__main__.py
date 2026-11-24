@@ -13,7 +13,7 @@ from .storage import (
     set_setting, user_count, clear_chat, get_enabled_group_chats,
     get_user_stats, get_top_users, get_recent_intel,
 )
-from .logic import is_fc_topic, is_bot_name_call, is_recent_bot_followup
+from .logic import is_fc_topic, is_bot_name_call, is_recent_bot_followup, should_spontaneously_reply
 from .ai import reply, summarize, ProviderError
 from .monitor import monitor_loop, build_intel_context, format_news_digest, format_sources_status
 from .renderz import player_context, is_player_data_question
@@ -279,10 +279,16 @@ async def handle_message(message):
     elif not is_private:
         chance = REPLY_PROBABILITY if settings["activity"] is None else settings["activity"]
         elapsed = now - last_spontaneous.get(chat_id, 0)
-        # Images in an FC Mobile group are eligible for the same low-noise
-        # initiative chance; direct replies always get full image analysis.
+        replied_message = message.get("reply_to_message") or {}
+        replied_author = replied_message.get("from") or {}
+        reply_to_human = bool(replied_message) and not replied_author.get("is_bot")
+        # A short human-to-human reply chain is not an invitation to interrupt.
+        # Images remain eligible, but only outside an explicit human reply chain.
         eligible = has_image or is_fc_topic(text_in)
-        if not eligible or elapsed < 240 or random.random() >= chance:
+        if not eligible or not is_fc_topic(text_in) or not should_spontaneously_reply(
+            text_in, chance, random.random(), elapsed,
+            previous_role=previous_role, reply_to_human=reply_to_human,
+        ):
             return
 
     image_data = None
