@@ -33,7 +33,7 @@ async def _completion(messages, temperature=0.8, max_tokens=450):
                 json=payload,
             )
             if response.is_error:
-                detail = (response.text or "").strip().replace("\\n", " ")[:1200]
+                detail = (response.text or "").strip().replace("\n", " ")[:1200]
                 raise ProviderError(
                     f"Groq HTTP {response.status_code}: {detail or response.reason_phrase}"
                 )
@@ -68,10 +68,10 @@ async def summarize(memory, messages):
         "Сделай краткое обновление долгосрочной памяти этой игровой группы. "
         "Сохраняй только устойчивые, не чувствительные факты: игровые предпочтения, любимые клубы/карты, "
         "общие мемы и важные контексты. Не сохраняй адреса, контакты, здоровье, финансы, личные секреты, "
-        "не делай догадок. Русский язык, максимум 1000 символов. Предыдущая память:\\n"
+        "не делай догадок. Русский язык, максимум 1000 символов. Предыдущая память:\n"
         + (memory or "пусто")
-        + "\\nСвежие сообщения:\\n"
-        + "\\n".join(m["content"] for m in messages[-30:])
+        + "\nСвежие сообщения:\n"
+        + "\n".join(m["content"] for m in messages[-30:])
     )
     result = await _completion(
         [
