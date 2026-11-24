@@ -23,6 +23,7 @@ GROQ_API_URL = os.getenv(
     "https://api.groq.com/openai/v1/chat/completions",
 ).strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
+GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b").strip()
 BOT_NAME = os.getenv("BOT_NAME", "FC Mate").strip() or "FC Mate"
 PERSONA = os.getenv(
     "BOT_PERSONA",
