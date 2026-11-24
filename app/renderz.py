@@ -11,7 +11,7 @@ import logging
 import re
 import time
 from html.parser import HTMLParser
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import urljoin
 
 BASE_URL = "https://renderz.app"
 PLAYERS_URL = BASE_URL + "/players"
