@@ -93,7 +93,7 @@ _CYRILLIC_TO_LATIN = str.maketrans({
 
 def _transliterate_name_token(token: str) -> str:
     """Fallback transliteration for Russian player names not in the alias list."""
-    return token.translate(_CYRILLIC_TO_LATIN) if re.search(r"[а-яё]", token, re.I) else token
+    return token.casefold().translate(_CYRILLIC_TO_LATIN) if re.search(r"[а-яё]", token, re.I) else token
 
 
 def _player_links(source: str, query: str) -> list[dict]:
