@@ -20,9 +20,7 @@ log = logging.getLogger("vasek.monitor")
 
 PROMO_CHECK_SECONDS = 8640  # 10 checks per day
 NEWS_CHECK_SECONDS = 900  # refresh recent game news every 15 minutes
-ON_DEMAND_REFRESH_SECONDS = 300  # refresh general feeds once per 5 minutes
 QUESTION_REFRESH_SECONDS = 90  # question-specific Google News lookup
-_last_on_demand_refresh = 0.0
 _last_question_refresh = 0.0
 REQUEST_HEADERS = {
     "User-Agent": "Vasek/1.0 (+FC Mobile community news monitor)",
@@ -254,7 +252,7 @@ async def monitor_loop(client, send_alert):
 
 
 async def build_intel_context(query, client=None):
-    global _last_on_demand_refresh, _last_question_refresh
+    global _last_question_refresh
     is_game_query = bool(re.search(
         r"fc\s*mobile|фк\s*мобайл|промокод|\bкод\b|карточк|овр|состав|"
         r"событи|обновлени|патч|тактик|мета|игрок|награ|магазин|обмен|"
@@ -265,13 +263,6 @@ async def build_intel_context(query, client=None):
     if not is_game_query:
         return ""
     now = time.monotonic()
-    # Refresh general official/community feeds periodically, including on demand.
-    if client is not None and now - _last_on_demand_refresh >= ON_DEMAND_REFRESH_SECONDS:
-        _last_on_demand_refresh = now
-        try:
-            await check_news_once(client)
-        except Exception:
-            log.exception("On-demand FC Mobile refresh failed")
     # Also run a query-specific Google News RSS search so a question about a
     # particular event/player/update is not limited to the static feed topics.
     if client is not None and now - _last_question_refresh >= QUESTION_REFRESH_SECONDS:
