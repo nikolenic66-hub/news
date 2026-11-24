@@ -8,15 +8,20 @@ Russian-speaking AI group participant. It discusses FC Mobile, cards/OVR, lineup
 3. In BotFather run `/setprivacy`, select your bot, set **Disable** so it can read normal group messages (privacy mode can take a few minutes; re-add bot if necessary).
 4. You do not need to give it administrator privileges.
 
+## Groq API
+Create an API key in the [Groq Console](https://console.groq.com/keys). The default model is `openai/gpt-oss-120b`; the bot uses Groq's OpenAI-compatible Chat Completions endpoint.
+
+The Groq Free Plan has per-model limits, including request and token-per-day limits. Check the current values for your organization in the Groq Console; free quotas can change.
+
 ## Deploy on Amvera
 Build from this repository using Dockerfile. Set the environment variables below. Use persistent storage for the database path (e.g. mount storage and set `DB_PATH` to a file under that mount).
 
 | Variable | Meaning |
 |---|---|
 | TELEGRAM_BOT_TOKEN | Required Telegram bot token |
-| AI_API_KEY or DEEPSEEK_API_KEY | Required API key for OpenAI-compatible provider (legacy Amvera name supported) |
-| AI_BASE_URL or DEEPSEEK_BASE_URL | Provider API base ending in /v1 (default DeepSeek) |
-| AI_MODEL or DEEPSEEK_MODEL | Model name accepted by provider |
+| GROQ_API_KEY | Required Groq API key |
+| GROQ_API_URL | Groq Chat Completions URL; defaults to `https://api.groq.com/openai/v1/chat/completions` |
+| GROQ_MODEL | Model name; defaults to `openai/gpt-oss-120b` |
 | ADMIN_IDS | Optional comma-separated Telegram user IDs, in addition to Telegram group admins |
 | BOT_NAME | Bot display name |
 | BOT_PERSONA | Default personality |
