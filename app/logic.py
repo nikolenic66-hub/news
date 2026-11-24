@@ -1,4 +1,10 @@
 import re
+
+BOT_NAME_CALL = re.compile(r"(?i)(?<![\\w])(?:вас[её]к|васек|вась|васька)(?![\\w])")
+
+def is_bot_name_call(text:str)->bool:
+ return bool(BOT_NAME_CALL.search(text or ""))
+
 FC_WORDS=re.compile(r"(?i)(fc mobile|fcm|fcmobile|фк мобайл|фкм|овр|ovr|состав|карта игрока|карточк|обмен|ранг|дивизион|ивент|тактик|дриблинг|пак|квик селл|quick sell|рейтингов|гем|звезд|кампания)")
 def is_fc_topic(text:str)->bool:return bool(FC_WORDS.search(text or ""))
 def is_direct_message(text:str,bot_username:str|None,reply_to_bot:bool)->bool:
