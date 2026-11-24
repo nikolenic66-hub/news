@@ -66,6 +66,9 @@ class RenderZParsingTests(unittest.TestCase):
     def test_query_extraction_and_question_detection(self):
         self.assertEqual(_extract_search_query("Какой OVR у Месси?"), "Месси")
         self.assertTrue(is_player_data_question("Сколько OVR у Haaland?"))
+        self.assertTrue(is_player_data_question("Messi 115"))
+        self.assertTrue(is_player_data_question("Salah stats"))
+        self.assertTrue(is_player_data_question("Essien 124"))
         self.assertFalse(is_player_data_question("Кто выиграл матч вчера?"))
 
     def test_player_context_verification_requires_parsed_card_marker(self):
