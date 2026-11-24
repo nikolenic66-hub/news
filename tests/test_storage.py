@@ -2,6 +2,8 @@ import os
 import tempfile
 import unittest
 
+import aiosqlite
+
 os.environ.setdefault("DB_PATH", ":memory:")
 
 from app import storage
@@ -14,7 +16,6 @@ class PersistentActivityTests(unittest.IsolatedAsyncioTestCase):
         self.old_history = storage.MAX_HISTORY
         storage.DB_PATH = os.path.join(self.temp.name, "test.sqlite3")
         storage.MAX_HISTORY = 1
-        import aiosqlite
         async with aiosqlite.connect(storage.DB_PATH) as db:
             await db.executescript("CREATE TABLE tournaments(id INTEGER); CREATE TABLE tournament_entries(id INTEGER); CREATE TABLE tournament_missed(id INTEGER);")
         await storage.init_db()
