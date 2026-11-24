@@ -26,27 +26,32 @@ def _bounded_messages(messages):
         content = item.get("content", "")
         if role == "system":
             if isinstance(content, str) and content.strip():
-                systems.append({"role": "system", "content": content[:1100]})
+                systems.append({"role": "system", "content": content})
         else:
             conversation.append({"role": role, "content": content})
 
-    # The system persona is inserted separately by reply(). Other system blocks
-    # are bounded to 3,500 characters total to keep monitor/memory data lean.
+    # Keep the persona intact, then cap auxiliary source/context blocks.
     kept_systems = []
-    budget = 3500
-    for item in reversed(systems[-5:]):
-        content = item["content"][:budget]
-        if content:
-            kept_systems.insert(0, {"role": "system", "content": content})
-            budget -= len(content)
+    if systems:
+        kept_systems.append({"role": "system", "content": systems[0]["content"][:4200]})
+    budget = 2800
+    for item in reversed(systems[1:]):
         if budget <= 0:
             break
+        content = item["content"][:min(1000, budget)]
+        if content:
+            kept_systems.insert(1, {"role": "system", "content": content})
+            budget -= len(content)
 
     bounded_conversation = []
-    for item in conversation[-8:]:
+    recent = conversation[-8:]
+    for item in recent:
         content = item["content"]
         if isinstance(content, str):
-            content = content[:650]
+            # Memory summarization is a single long user prompt; preserve more
+            # there while normal chat remains intentionally compact.
+            cap = 2600 if len(recent) <= 2 else 650
+            content = content[:cap]
         elif isinstance(content, list):
             # Preserve image parts; only trim their associated text content.
             parts = []
