@@ -11,14 +11,14 @@
 ## Источники
 - EA FC Mobile News: https://www.ea.com/games/ea-sports-fc/fc-mobile/news
 - EA redeem FAQ: https://www.ea.com/en-gb/playtesting/news/redeem-code-faq
-- Google News RSS queries for EA news, codes, gameplay and meta. RenderZ, FCMHub, FC Mobile Forum and Regista XI database content are excluded from automated ingestion because their terms restrict extraction or reuse; FC Index remains excluded until its terms are reviewed.
+- Google News RSS queries for EA news, codes, gameplay and meta. RenderZ is not a scheduled news/RSS source: its separate on-demand player-card lookup in `app/renderz.py` uses only public HTML pages, is low-volume/cached, and is covered by the RenderZ permission documented in the roadmap. It does not bulk-import card data into SQLite or use private/mobile endpoints. FCMHub, FC Mobile Forum and Regista XI database content remain excluded from automated ingestion; FC Index remains excluded until its terms are reviewed.
 
 ## Важные ограничения
 - EA redemption portal не предоставляет публичной проверки валидности кода. Поэтому найденный в RSS код считается возможным и не подтверждённым EA, пока игрок не проверит его на официальной странице.
 - Сборщик не вводит код в аккаунт пользователя и не просит EA логин/пароль.
 - Google News может индексировать публикации с задержкой или пропускать их; поэтому мониторинг не гарантирует мгновенное обнаружение каждого кода.
 - Статические страницы со списками активных кодов не используются для рассылки: на них могут оставаться старые коды без даты публикации. Старые статьи старше 48 часов и публикации с датой более чем на 2 часа в будущем игнорируются.
-- RSS даёт заголовки и краткие выдержки, а не полноценную базу карточек/цен рынка. RenderZ, FCMHub, FC Mobile Forum и Regista XI не используются для автоматического извлечения данных: их условия ограничивают сбор и повторное использование баз. FC Index исключён до отдельной проверки условий. Для точных OVR, характеристик и цен нужен другой разрешённый источник или письменная лицензия. Официальная EA Community API описана для Ultimate Team и одобренных партнёров, а не как открытая база FC Mobile.
+- RSS даёт заголовки и краткие выдержки, а не полноценную базу карточек/цен рынка. RenderZ используется только для отдельного поиска карточек по запросу игрока через публичные HTML-страницы (не для массового импорта); FCMHub, FC Mobile Forum и Regista XI остаются исключены из автоматического извлечения. FC Index исключён до отдельной проверки условий. Для точных OVR, характеристик и цен нужен разрешённый источник; не использовать закрытые endpoints или обход ограничений. Официальная EA Community API описана для Ultimate Team и одобренных партнёров, а не как открытая база FC Mobile.
 - Васёк распознаёт фото и изображения-документы через Groq Vision; в группе для гарантированного анализа нужно ответить на изображение или упомянуть бота в подписи.
 
 ## Интервалы и стоимость
