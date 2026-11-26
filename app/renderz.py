@@ -336,14 +336,14 @@ async def player_context(message: str, client) -> str:
         "ямал": "Yamal", "родри": "Rodri", "сон": "Son", "фоден": "Foden",
         "неймар": "Neymar", "неймара": "Neymar", "эссьен": "Essien",
         "руни": "Rooney", "фердинанд": "Ferdinand",
-        "ван": "van", "дэйк": "Dijk", "де": "de", "брюйне": "Bruyne",
+        "ван": "van", "дейк": "Dijk", "дэйк": "Dijk", "де": "de", "брюйне": "Bruyne",
         "кварацхелия": "Kvaratskhelia", "кварацхелии": "Kvaratskhelia",
         "лэмпард": "Lampard", "джеррард": "Gerrard", "зидан": "Zidane",
         "кака": "Kaka", "лам": "Lahm", "рибери": "Ribery",
     }
     raw_queries = [
         part.strip() for part in re.split(r"(?i)\b(?:и|или|vs|versus|против|and|or)\b", query)
-        if _search_tokens(part)
+        if _search_tokens(" ".join(_transliterate_name_token(token) for token in part.split()))
     ]
     search_queries = []
     for raw_query in raw_queries:
@@ -370,24 +370,32 @@ async def player_context(message: str, client) -> str:
     errors = []
     cards_by_url = {}
     successful_fetch = False
-    found_query_count = 0
+    matched_by_query = {player_query: [] for player_query in search_queries}
+
+    # A comparison may contain several player names. Fetch each public list page
+    # once, then test all still-unmatched names against that same HTML response.
+    # This avoids repeating up to MAX_SEARCH_PAGES requests for every player.
+    for page_number in range(1, MAX_SEARCH_PAGES + 1):
+        pending_queries = [
+            player_query for player_query, matched in matched_by_query.items()
+            if not matched
+        ]
+        if not pending_queries:
+            break
+        url = PLAYERS_URL if page_number == 1 else f"{PLAYERS_URL}?page={page_number}"
+        try:
+            page = await _get_page(client, url)
+            successful_fetch = True
+        except Exception as exc:
+            errors.append(type(exc).__name__)
+            # A page failure should not trigger a burst of requests.
+            break
+        for player_query in pending_queries:
+            matched_by_query[player_query] = _player_links(page, player_query)
+
+    found_query_count = sum(bool(matched) for matched in matched_by_query.values())
     for player_query in search_queries:
-        matched = []
-        for page_number in range(1, MAX_SEARCH_PAGES + 1):
-            url = PLAYERS_URL if page_number == 1 else f"{PLAYERS_URL}?page={page_number}"
-            try:
-                page = await _get_page(client, url)
-                successful_fetch = True
-                matched = _player_links(page, player_query)
-                if matched:
-                    break
-            except Exception as exc:
-                errors.append(type(exc).__name__)
-                # A page failure should not trigger a burst of requests.
-                break
-        if matched:
-            found_query_count += 1
-        for card in matched:
+        for card in matched_by_query.get(player_query, []):
             cards_by_url.setdefault(card["url"], card)
     cards = list(cards_by_url.values())[:MAX_RESULTS]
 

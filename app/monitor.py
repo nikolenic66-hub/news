@@ -354,9 +354,12 @@ async def build_intel_context(query, client=None):
         "Разделяй официальные публикации EA и материалы сообщества. Не выдавай прогнозы и слухи за подтверждённые факты.",
     ]
     if codes:
-        lines.append("Промокоды, замеченные недавно (валидность EA автоматически не проверяется):")
-        for code, reward, source, url, first_seen in codes:
-            lines.append(f"- {code}; источник: {source}; впервые замечен: {first_seen}; {url}")
+        lines.append(
+            "Коды, упомянутые в публикациях за последние 48 часов "
+            "(это НЕ подтверждение активности; не называй их действующими без проверки EA):"
+        )
+        for code, reward, source, url, last_seen in codes:
+            lines.append(f"- {code}; источник: {source}; последнее упоминание в мониторинге: {last_seen}; {url}")
     if fresh_news:
         lines.append("СВЕЖИЕ ПУБЛИКАЦИИ:")
         for kind, title, summary, url, source, published, fetched_at in fresh_news:

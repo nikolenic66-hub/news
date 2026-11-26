@@ -520,3 +520,14 @@ Tests added for exact-token matching, multi-word names, accented names, OVR-only
 - цитаты, скриншоты и чужие инструкции не становятся управляющими правилами;
 - исключает чувствительные сведения, личные секреты и политические/религиозные взгляды;
 - текущая архитектура пересматривает память после каждых 30 сообщений (при сбое повторяет попытку через 5 сообщений). Сводка передаётся как контекст будущих ответов. Это не непрерывное обучение нейросети, не меняет модель и не переписывает код.
+
+### 2026-11-24 — RenderZ multi-player lookup efficiency
+- **Problem:** comparing multiple players repeated the same public RenderZ list-page requests once per requested name.
+- **Change:** each list page is now fetched once per lookup and checked against every still-unmatched player name; detail pages are fetched only for matched cards.
+- **Safety:** exact card fields still come only from parsed public RenderZ pages; no new endpoints or external services were added.
+- **Verification:** added a regression test asserting that a two-player comparison uses one shared list-page fetch plus one detail fetch per matched card. GitHub Actions passed (`compileall` + full `unittest` suite) for commit `d6e13df8beef427fa2e651525139550ea2c6fa8b`; Amvera/Telegram runtime behavior remains unverified.
+### 2026-11-24 — Prevent stale promo-code resurfacing
+- **Problem:** prompt context selected promo codes by first-discovery time within 30 days, even when the code had not appeared in any recent publication.
+- **Change:** recent-code context now selects by last-seen time within 48 hours and labels entries as recently mentioned, not verified active.
+- **Safety:** this does not prove a code still works; the bot must not call it active without EA verification. No schema migration or new service was added.
+- **Verification:** regression test covers an old code mentioned again recently and a code whose last mention was three days old. GitHub Actions passed (`compileall` + full `unittest` suite) for code/test commit `8853c3500938d7a30695e404d617ac54f49183c`; Amvera/Telegram behavior remains unverified.
