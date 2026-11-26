@@ -152,10 +152,16 @@ class RenderZParsingTests(unittest.IsolatedAsyncioTestCase):
         fetch_page = AsyncMock(side_effect=[list_html, detail_html])
 
         try:
+            self.assertEqual(_extract_search_query("Дейк stats"), "Дейк")
+            self.assertTrue(is_player_data_question("Дейк stats"))
+            self.assertEqual(
+                _player_links(list_html, "Dijk")[0]["url"],
+                "https://renderz.app/player/1-van-dijk",
+            )
             with patch("app.renderz._get_page", fetch_page):
                 result = await renderz.player_context("Дейк stats", object())
 
-            self.assertTrue(is_verified_player_context(result))
+            self.assertTrue(is_verified_player_context(result), result)
             self.assertIn("Virgil van Dijk", result)
             self.assertEqual(fetch_page.await_count, 2)
             self.assertEqual(fetch_page.await_args_list[0].args[1], renderz.PLAYERS_URL)
