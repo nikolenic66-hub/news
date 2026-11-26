@@ -336,7 +336,7 @@ async def player_context(message: str, client) -> str:
         "ямал": "Yamal", "родри": "Rodri", "сон": "Son", "фоден": "Foden",
         "неймар": "Neymar", "неймара": "Neymar", "эссьен": "Essien",
         "руни": "Rooney", "фердинанд": "Ferdinand",
-        "ван": "van", "дэйк": "Dijk", "де": "de", "брюйне": "Bruyne",
+        "ван": "van", "дейк": "Dijk", "дэйк": "Dijk", "де": "de", "брюйне": "Bruyne",
         "кварацхелия": "Kvaratskhelia", "кварацхелии": "Kvaratskhelia",
         "лэмпард": "Lampard", "джеррард": "Gerrard", "зидан": "Zidane",
         "кака": "Kaka", "лам": "Lahm", "рибери": "Ribery",
