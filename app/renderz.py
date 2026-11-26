@@ -343,7 +343,7 @@ async def player_context(message: str, client) -> str:
     }
     raw_queries = [
         part.strip() for part in re.split(r"(?i)\b(?:и|или|vs|versus|против|and|or)\b", query)
-        if _search_tokens(part)
+        if _search_tokens(" ".join(_transliterate_name_token(token) for token in part.split()))
     ]
     search_queries = []
     for raw_query in raw_queries:
