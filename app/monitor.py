@@ -49,7 +49,7 @@ NEWS_FEEDS = (
     ),
     (
         "FC Mobile promo-code news",
-        "https://news.google.com/rss/search?q=FC+Mobile+redeem+code+when%3A2d&hl=en-US&gl=US&ceid=US:en",
+        "https://news.google.com/rss/search?q=FC+Mobile+%28redeem+code+OR+promo+code+OR+gift+code%29+when%3A2d&hl=en-US&gl=US&ceid=US:en",
         "promo_news",
     ),
 )
