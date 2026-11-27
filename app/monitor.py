@@ -20,7 +20,7 @@ from .storage import (
 
 log = logging.getLogger("vasek.monitor")
 
-PROMO_CHECK_SECONDS = 8640  # 10 checks per day
+PROMO_CHECK_SECONDS = 600  # check promo codes every 10 minutes
 NEWS_CHECK_SECONDS = 900  # refresh recent game news every 15 minutes
 QUESTION_REFRESH_SECONDS = 90  # question-specific Google News lookup
 _last_question_refresh = 0.0
@@ -28,6 +28,8 @@ REQUEST_HEADERS = {
     "User-Agent": "Vasek/1.0 (+FC Mobile community news monitor)",
     "Accept": "text/html,application/rss+xml,application/xml;q=0.9,*/*;q=0.8",
 }
+
+PROMO_BING_URL = "https://www.bing.com/news/search?q=FC+Mobile+%28redeem+code+OR+promo+code+OR+gift+code%29&format=rss"
 
 NEWS_FEEDS = (
     (
@@ -162,7 +164,7 @@ def _codes_from_recent_article(entry):
         return []
     title = entry.get("title", "")
     text = title + " " + entry.get("summary", "")
-    if not re.search(r"\b(redeem\s+code|promo\s+code|new\s+code|code\s+released|code\s+available)\b", text, re.IGNORECASE):
+    if not re.search(r"\b(?:new\s+(?:redeem|promo|gift)\s+codes?|new\s+codes?|(?:redeem|promo|gift)\s+codes?|codes?\s+(?:released|available)|(?:released|available)\s+codes?)\b", text, re.IGNORECASE):
         return []
     candidates = re.findall(r"(?<![A-Z0-9])([A-Z][A-Z0-9]{5,23})(?![A-Z0-9])", text.upper())
     return [c for c in dict.fromkeys(candidates) if c not in STOP_WORDS]
@@ -213,19 +215,27 @@ async def _get_text(client, url):
 
 
 async def check_promo_codes_once(client, send_alert):
-    """Alert only on codes mentioned in dated, recent promo-code articles.
+    """Scan independent Google and Bing RSS searches for recent promo-code posts.
 
-    Static code-list pages are deliberately not used for alerts: they often retain
-    old codes and provide no trustworthy publication/creation timestamp.
+    Only dated article titles/snippets are used; static code-list pages are not
+    scraped or trusted for alerting. Candidate codes still require EA redemption.
     """
     new_codes = 0
-    for source_name, url, kind in NEWS_FEEDS:
-        if kind != "promo_news":
-            continue
+    promo_sources = [
+        (source_name, url)
+        for source_name, url, kind in NEWS_FEEDS
+        if kind == "promo_news"
+    ]
+    promo_sources.append(("Bing News promo-code search", PROMO_BING_URL))
+    seen_this_cycle = set()
+    for source_name, url in promo_sources:
         try:
             feed = await _get_text(client, url)
             for entry in parse_rss(feed):
                 for code in _codes_from_recent_article(entry):
+                    if code in seen_this_cycle:
+                        continue
+                    seen_this_cycle.add(code)
                     inserted = await save_promo_code(code, source_name, entry["url"])
                     if inserted:
                         new_codes += 1
@@ -233,7 +243,8 @@ async def check_promo_codes_once(client, send_alert):
                             "🚨 Возможный новый промокод FC Mobile: " + code + "\n"
                             "Дата публикации: " + (entry.get("published") or "не указана") + "\n"
                             "Публикация: " + entry["title"][:250] + "\n"
-                            "Источник: " + entry["url"] + "\n"
+                            "Источник поиска: " + source_name + "\n"
+                            "Ссылка: " + entry["url"] + "\n"
                             "Активировать: https://redeem.fcm.ea.com/\n"
                             "Код найден в свежей публикации за последние 48 часов; действительность проверь на странице EA."
                         )
