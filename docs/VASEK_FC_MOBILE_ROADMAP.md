@@ -6,6 +6,13 @@
 
 ## Журнал реализации
 
+### 2026-11-27 — Promo-code discovery reliability
+- **Confirmed weaknesses in main:** promo scanning ran every 8,640 seconds (2h24m); it searched one Google News RSS query; the phrase filter rejected common plural `redeem codes` wording and `gift code`; Bing RSS was only used after HTTP errors, not after a successful feed with no candidate codes.
+- **Prepared in Draft PR #3:** increase scan interval to 10 minutes, broaden Google query and article phrase matching, search Bing News RSS independently, and deduplicate candidates across both feeds.
+- **Regression coverage:** plural/gift wording, Bing detection when Google feed has no candidate, and duplicate results.
+- **Verification:** GitHub Actions run #267 completed successfully: compileall + all 46 unittest tests passed.
+- **Deployment status:** Draft PR only; not merged or deployed. Live Amvera/Telegram logs and real feed responses were unavailable, so runtime detection is not yet confirmed.
+
 ### 2026-11-24
 ### 2026-11-24 — RenderZ fallback behavior
 - **Player-card fallback:** when the primary RenderZ lookup returns an error or no parsed card, the bot now attempts a secondary Bing News RSS search for player/card-related publications and links.
