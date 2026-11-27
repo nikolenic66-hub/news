@@ -83,10 +83,10 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
             <source url="https://example.com">Example</source>
         </item></channel></rss>"""
 
+        alert = AsyncMock()
         with patch.object(monitor, "_get_text", new=AsyncMock(side_effect=[empty_feed, bing_feed])) as fetch:
             with patch.object(monitor, "save_promo_code", new=AsyncMock(return_value=True)) as save:
-                with patch.object(monitor, "send_alert", new=AsyncMock()) as alert:
-                    count = await monitor.check_promo_codes_once(object(), alert)
+                count = await monitor.check_promo_codes_once(object(), alert)
 
         self.assertEqual(count, 1)
         self.assertEqual(fetch.await_count, 2)
@@ -106,10 +106,10 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
             <source url="https://example.com">Example</source>
         </item></channel></rss>"""
 
+        alert = AsyncMock()
         with patch.object(monitor, "_get_text", new=AsyncMock(return_value=feed)) as fetch:
             with patch.object(monitor, "save_promo_code", new=AsyncMock(return_value=True)) as save:
-                with patch.object(monitor, "send_alert", new=AsyncMock()) as alert:
-                    count = await monitor.check_promo_codes_once(object(), alert)
+                count = await monitor.check_promo_codes_once(object(), alert)
 
         self.assertEqual(count, 1)
         self.assertEqual(fetch.await_count, 2)
