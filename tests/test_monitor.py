@@ -56,6 +56,88 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
             [],
         )
 
+    def test_promo_scan_interval_is_ten_minutes(self):
+        self.assertEqual(monitor.PROMO_CHECK_SECONDS, 600)
+
+    def test_promo_article_accepts_plural_redeem_codes_and_gift_code(self):
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(minutes=5))
+        self.assertEqual(
+            _codes_from_recent_article({
+                "title": "FC Mobile Redeem Codes - November 27",
+                "summary": "New gift code: FRIDAYFRENZY for rewards",
+                "published": recent,
+            }),
+            ["FRIDAYFRENZY"],
+        )
+
+    def test_promo_article_extracts_footballfeast_from_current_headline_format(self):
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(minutes=5))
+        self.assertEqual(
+            _codes_from_recent_article({
+                "title": "FC Mobile redeem codes: FOOTBALLFEAST",
+                "summary": "Use FOOTBALLFEAST for a Draft Voucher and Rank Up Points",
+                "published": recent,
+            }),
+            ["FOOTBALLFEAST"],
+        )
+
+    def test_promo_article_accepts_fc_mobile_code_title_and_ignores_pack_words(self):
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(minutes=5))
+        self.assertEqual(
+            _codes_from_recent_article({
+                "title": "FC Mobile code: FRIDAYFRENZY — free 118-120 OVR Rivals Pack",
+                "summary": "Black Friday giveaway",
+                "published": recent,
+            }),
+            ["FRIDAYFRENZY"],
+        )
+
+    async def test_promo_scan_finds_code_from_bing_when_google_feed_is_empty(self):
+        from unittest.mock import AsyncMock, patch
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(minutes=5))
+        empty_feed = "<rss><channel/></rss>"
+        bing_feed = f"""<rss><channel><item>
+            <title>FC Mobile Redeem Codes - November 27</title>
+            <link>https://example.com/new-code</link>
+            <description>New gift code: FRIDAYFRENZY for rewards</description>
+            <pubDate>{recent}</pubDate>
+            <source url="https://example.com">Example</source>
+        </item></channel></rss>"""
+
+        alert = AsyncMock()
+        with patch.object(monitor, "_get_text", new=AsyncMock(side_effect=[empty_feed, bing_feed])) as fetch:
+            with patch.object(monitor, "save_promo_code", new=AsyncMock(return_value=True)) as save:
+                count = await monitor.check_promo_codes_once(object(), alert)
+
+        self.assertEqual(count, 1)
+        self.assertEqual(fetch.await_count, 2)
+        self.assertEqual(save.await_count, 1)
+        self.assertIn("FRIDAYFRENZY", alert.await_args.args[0])
+        self.assertIn("Bing News promo-code search", alert.await_args.args[0])
+
+    async def test_promo_scan_deduplicates_codes_found_in_both_feeds(self):
+        from unittest.mock import AsyncMock, patch
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(minutes=5))
+        feed = f"""<rss><channel><item>
+            <title>FC Mobile Redeem Codes - November 27</title>
+            <link>https://example.com/new-code</link>
+            <description>New gift code: FRIDAYFRENZY for rewards</description>
+            <pubDate>{recent}</pubDate>
+            <source url="https://example.com">Example</source>
+        </item></channel></rss>"""
+
+        alert = AsyncMock()
+        with patch.object(monitor, "_get_text", new=AsyncMock(return_value=feed)) as fetch:
+            with patch.object(monitor, "save_promo_code", new=AsyncMock(return_value=True)) as save:
+                count = await monitor.check_promo_codes_once(object(), alert)
+
+        self.assertEqual(count, 1)
+        self.assertEqual(fetch.await_count, 2)
+        self.assertEqual(save.await_count, 1)
+        self.assertEqual(alert.await_count, 1)
+
     def test_rss_parser_reads_basic_items(self):
         feed = """<?xml version="1.0"?>
         <rss><channel><item>
