@@ -70,6 +70,17 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
             ["FRIDAYFRENZY"],
         )
 
+    def test_promo_article_accepts_fc_mobile_code_title_and_ignores_pack_words(self):
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(minutes=5))
+        self.assertEqual(
+            _codes_from_recent_article({
+                "title": "FC Mobile code: FRIDAYFRENZY — free 118-120 OVR Rivals Pack",
+                "summary": "Black Friday giveaway",
+                "published": recent,
+            }),
+            ["FRIDAYFRENZY"],
+        )
+
     async def test_promo_scan_finds_code_from_bing_when_google_feed_is_empty(self):
         from unittest.mock import AsyncMock, patch
 
