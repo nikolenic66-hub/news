@@ -70,6 +70,17 @@ class MonitorParsingTests(unittest.IsolatedAsyncioTestCase):
             ["FRIDAYFRENZY"],
         )
 
+    def test_promo_article_extracts_footballfeast_from_current_headline_format(self):
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(minutes=5))
+        self.assertEqual(
+            _codes_from_recent_article({
+                "title": "FC Mobile redeem codes: FOOTBALLFEAST",
+                "summary": "Use FOOTBALLFEAST for a Draft Voucher and Rank Up Points",
+                "published": recent,
+            }),
+            ["FOOTBALLFEAST"],
+        )
+
     def test_promo_article_accepts_fc_mobile_code_title_and_ignores_pack_words(self):
         recent = format_datetime(datetime.now(timezone.utc) - timedelta(minutes=5))
         self.assertEqual(
