@@ -60,7 +60,7 @@ STOP_WORDS = {
     "SEPTEMBER", "AUGUST", "JULY", "JUNE", "MAY", "APRIL", "MARCH",
     "FEBRUARY", "JANUARY", "STATUS", "PLAYER", "PLAYERS", "PACK",
     "PACKS", "ENGLAND", "SPAIN", "BRAZIL", "ARGENTINA", "GERMANY", "FRANCE", "ITALY", "PORTUGAL", "NETHERLANDS", "TURKEY", "MEXICO", "USA", "SHARDS", "POINTS", "HANDBOOK", "DRAFT", "VOUCHER", "VOUCHERS", "GEMS", "COINS",
-    "UPDATED", "TODAY", "FREE", "OFFICIAL", "CLAIM", "CHECK",
+    "UPDATED", "TODAY", "FREE", "OFFICIAL", "CLAIM", "CHECK", "RIVALS", "SPORTS", "GIVEAWAY", "FRIDAY",
     "AVAILABLE", "NEW", "ALL", "HOW", "WHERE", "THE", "AND",
 }
 
@@ -164,7 +164,7 @@ def _codes_from_recent_article(entry):
         return []
     title = entry.get("title", "")
     text = title + " " + entry.get("summary", "")
-    if not re.search(r"\b(?:new\s+(?:redeem|promo|gift)\s+codes?|new\s+codes?|(?:redeem|promo|gift)\s+codes?|codes?\s+(?:released|available)|(?:released|available)\s+codes?)\b", text, re.IGNORECASE):
+    if not re.search(r"\b(?:fc\s+mobile\s+codes?|new\s+(?:redeem|promo|gift)\s+codes?|new\s+codes?|(?:redeem|promo|gift)\s+codes?|codes?\s+(?:released|available)|(?:released|available)\s+codes?)\b", text, re.IGNORECASE):
         return []
     candidates = re.findall(r"(?<![A-Z0-9])([A-Z][A-Z0-9]{5,23})(?![A-Z0-9])", text.upper())
     return [c for c in dict.fromkeys(candidates) if c not in STOP_WORDS]
