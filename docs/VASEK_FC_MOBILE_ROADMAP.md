@@ -6,6 +6,11 @@
 
 ## Журнал реализации
 
+### 2026-11-28 — Promo-code regression coverage
+- Added a test for the real-world title pattern `FC Mobile redeem codes: FOOTBALLFEAST`, sourced from current public code listings; the test checks that the exact code is extracted and unrelated reward text is not emitted.
+- GitHub Actions run #270 for commit `7ba4f61941a5cdb2b5ad00a8f23c967b0217f274` passed compileall and all 48 unittest tests.
+- This confirms parser behavior under mocked RSS fixtures only; live Google/Bing feeds and Telegram/Amvera delivery remain unverified.
+
 ### 2026-11-27 — Promo-code discovery reliability
 - **Confirmed weaknesses in main:** promo scanning ran every 8,640 seconds (2h24m); it searched one Google News RSS query; the phrase filter rejected common plural `redeem codes` wording and `gift code`; Bing RSS was only used after HTTP errors, not after a successful feed with no candidate codes.
 - **Prepared in Draft PR #3:** increase scan interval to 10 minutes, broaden Google query and article phrase matching, search Bing News RSS independently, and deduplicate candidates across both feeds.
